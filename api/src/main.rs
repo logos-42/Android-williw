@@ -58,6 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nest("/api/auth", routes::auth::routes())
         .nest("/api/compute", routes::compute::routes())
         .nest("/api/payment", routes::payment::routes())
+        .nest("/api/local", routes::local::routes())
         .route("/health", axum::routing::get(|| async { "OK" }))
         .layer(cors)
         .layer(TraceLayer::new_for_http())

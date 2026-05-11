@@ -13,6 +13,8 @@ pub fn App() -> impl IntoView {
                 <Route path="/login" component=pages::Login />
                 <Route path="/models" component=pages::Models />
                 <Route path="/models/:id" component=pages::ModelDetail />
+                <Route path="/local-models" component=pages::LocalModels />
+                <Route path="/api-server" component=pages::ApiServer />
                 <Route path="/payment/:order_id" component=pages::Payment />
                 <Route path="/orders" component=pages::Orders />
                 <Route path="/profile" component=pages::Profile />

@@ -147,6 +147,87 @@ impl ApiClient {
         let response: ApiResponse<ComputeRequest> = self.post("/compute/request", &request).await?;
         response.data.ok_or(response.error.unwrap_or_else(|| "Unknown error".to_string()))
     }
+
+    pub async fn get_local_models(&self) -> Result<Vec<LocalModel>, String> {
+        let response: ApiResponse<Vec<LocalModel>> = self.get("/local/models").await?;
+        response.data.ok_or(response.error.unwrap_or_else(|| "Unknown error".to_string()))
+    }
+
+    pub async fn get_local_model(&self, id: Uuid) -> Result<LocalModel, String> {
+        let response: ApiResponse<LocalModel> = self.get(&format!("/local/models/{}", id)).await?;
+        response.data.ok_or(response.error.unwrap_or_else(|| "Unknown error".to_string()))
+    }
+
+    pub async fn download_model(&self, model_id: Uuid) -> Result<LocalModel, String> {
+        let request = DownloadRequest { model_id };
+        let response: ApiResponse<LocalModel> = self.post("/local/models/download", &request).await?;
+        response.data.ok_or(response.error.unwrap_or_else(|| "Unknown error".to_string()))
+    }
+
+    pub async fn delete_local_model(&self, model_id: Uuid) -> Result<(), String> {
+        let _: ApiResponse<()> = self.delete(&format!("/local/models/{}", model_id)).await?;
+        Ok(())
+    }
+
+    async fn delete<T: for<'de> Deserialize<'de>>(&self, path: &str) -> Result<T, String> {
+        let url = format!("{}{}", self.base_url, path);
+        let client = reqwest::Client::new();
+
+        let mut req = client.delete(&url);
+
+        if let Some(ref token) = self.token {
+            req = req.header("Authorization", format!("Bearer {}", token));
+        }
+
+        let response = req.send().await.map_err(|e| e.to_string())?;
+
+        if response.status().is_success() {
+            response.json().await.map_err(|e| e.to_string())
+        } else {
+            Err(response.text().await.unwrap_or_else(|_| "Unknown error".to_string()))
+        }
+    }
+
+    pub async fn set_default_model(&self, model_id: Uuid) -> Result<LocalModel, String> {
+        let response: ApiResponse<LocalModel> = self.post(&format!("/local/models/{}/set-default", model_id), &()).await?;
+        response.data.ok_or(response.error.unwrap_or_else(|| "Unknown error".to_string()))
+    }
+
+    pub async fn get_model_manifest(&self) -> Result<ModelManifest, String> {
+        let response: ApiResponse<ModelManifest> = self.get("/local/manifest").await?;
+        response.data.ok_or(response.error.unwrap_or_else(|| "Unknown error".to_string()))
+    }
+
+    pub async fn get_device_info(&self) -> Result<DeviceInfo, String> {
+        let response: ApiResponse<DeviceInfo> = self.get("/local/device-info").await?;
+        response.data.ok_or(response.error.unwrap_or_else(|| "Unknown error".to_string()))
+    }
+
+    pub async fn start_local_server(&self) -> Result<String, String> {
+        let response: ApiResponse<String> = self.post("/local/server/start", &()).await?;
+        response.data.ok_or(response.error.unwrap_or_else(|| "Unknown error".to_string()))
+    }
+
+    pub async fn stop_local_server(&self) -> Result<String, String> {
+        let response: ApiResponse<String> = self.post("/local/server/stop", &()).await?;
+        response.data.ok_or(response.error.unwrap_or_else(|| "Unknown error".to_string()))
+    }
+
+    pub async fn get_server_config(&self) -> Result<LocalApiConfig, String> {
+        let response: ApiResponse<LocalApiConfig> = self.get("/local/server/config").await?;
+        response.data.ok_or(response.error.unwrap_or_else(|| "Unknown error".to_string()))
+    }
+
+    pub async fn update_server_config(&self, config: LocalApiConfig) -> Result<LocalApiConfig, String> {
+        let response: ApiResponse<LocalApiConfig> = self.post("/local/server/config", &config).await?;
+        response.data.ok_or(response.error.unwrap_or_else(|| "Unknown error".to_string()))
+    }
+
+    pub async fn run_inference(&self, model_id: Uuid, prompt: String, max_tokens: Option<u32>, temperature: Option<f32>) -> Result<InferenceResponse, String> {
+        let request = InferenceRequest { model_id, prompt, max_tokens, temperature };
+        let response: ApiResponse<InferenceResponse> = self.post("/local/inference", &request).await?;
+        response.data.ok_or(response.error.unwrap_or_else(|| "Unknown error".to_string()))
+    }
 }
 
 #[derive(Debug, Serialize)]

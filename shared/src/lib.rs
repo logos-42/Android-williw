@@ -190,3 +190,278 @@ impl<T> ApiResponse<T> {
         }
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LocalModel {
+    pub id: Uuid,
+    pub name: String,
+    pub model_type: LocalModelType,
+    pub size_gb: f64,
+    pub status: LocalModelStatus,
+    pub download_progress: Option<f32>,
+    pub download_url: String,
+    pub local_path: Option<String>,
+    pub inference_endpoint: Option<String>,
+    pub is_default: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum LocalModelType {
+    Lf25,
+    Gamma4,
+    Phi35,
+    Qwen25,
+    Yi,
+    Deepseek,
+    Llama,
+    Mistral,
+    Gemma,
+    Custom,
+}
+
+impl std::fmt::Display for LocalModelType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LocalModelType::Lf25 => write!(f, "lf2.5"),
+            LocalModelType::Gamma4 => write!(f, "gamma4"),
+            LocalModelType::Phi35 => write!(f, "phi3.5"),
+            LocalModelType::Qwen25 => write!(f, "qwen2.5"),
+            LocalModelType::Yi => write!(f, "yi"),
+            LocalModelType::Deepseek => write!(f, "deepseek"),
+            LocalModelType::Llama => write!(f, "llama"),
+            LocalModelType::Mistral => write!(f, "mistral"),
+            LocalModelType::Gemma => write!(f, "gemma"),
+            LocalModelType::Custom => write!(f, "custom"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum LocalModelStatus {
+    NotDownloaded,
+    Downloading,
+    Downloaded,
+    Installing,
+    Ready,
+    Error,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownloadRequest {
+    pub model_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownloadResponse {
+    pub model: LocalModel,
+    pub download_url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InferenceRequest {
+    pub model_id: Uuid,
+    pub prompt: String,
+    pub max_tokens: Option<u32>,
+    pub temperature: Option<f32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InferenceResponse {
+    pub model_id: Uuid,
+    pub output: String,
+    pub tokens_used: u32,
+    pub inference_time_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeviceInfo {
+    pub device_id: String,
+    pub device_name: String,
+    pub available_memory_gb: f64,
+    pub available_storage_gb: f64,
+    pub is_server_running: bool,
+    pub server_port: u16,
+    pub installed_models: Vec<LocalModel>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LocalApiConfig {
+    pub enabled: bool,
+    pub port: u16,
+    pub api_key: Option<String>,
+    pub allow_external_access: bool,
+}
+
+impl Default for LocalApiConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            port: 8081,
+            api_key: None,
+            allow_external_access: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelManifest {
+    pub models: Vec<ModelManifestEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelManifestEntry {
+    pub id: Uuid,
+    pub name: String,
+    pub model_type: LocalModelType,
+    pub size_gb: f64,
+    pub description: String,
+    pub min_memory_gb: f64,
+    pub recommended_memory_gb: f64,
+    pub quantization: String,
+    pub download_url: String,
+    pub checksum: String,
+}
+
+impl ModelManifest {
+    pub fn default_manifest() -> Self {
+        Self {
+            models: vec![
+                ModelManifestEntry {
+                    id: Uuid::parse_str("11111111-1111-1111-1111-111111111101").unwrap(),
+                    name: "LF2.5 7B".to_string(),
+                    model_type: LocalModelType::Lf25,
+                    size_gb: 4.2,
+                    description: "LightFeather 2.5 - Efficient 7B instruction following model".to_string(),
+                    min_memory_gb: 6.0,
+                    recommended_memory_gb: 8.0,
+                    quantization: "Q4_K_M".to_string(),
+                    download_url: "https://models.williw.ai/lf25-7b-q4km.gguf".to_string(),
+                    checksum: "sha256:abc123...".to_string(),
+                },
+                ModelManifestEntry {
+                    id: Uuid::parse_str("11111111-1111-1111-1111-111111111102").unwrap(),
+                    name: "LF2.5 14B".to_string(),
+                    model_type: LocalModelType::Lf25,
+                    size_gb: 8.5,
+                    description: "LightFeather 2.5 - Powerful 14B instruction following model".to_string(),
+                    min_memory_gb: 10.0,
+                    recommended_memory_gb: 16.0,
+                    quantization: "Q4_K_M".to_string(),
+                    download_url: "https://models.williw.ai/lf25-14b-q4km.gguf".to_string(),
+                    checksum: "sha256:def456...".to_string(),
+                },
+                ModelManifestEntry {
+                    id: Uuid::parse_str("11111111-1111-1111-1111-111111111103").unwrap(),
+                    name: "Gamma 4B".to_string(),
+                    model_type: LocalModelType::Gamma4,
+                    size_gb: 2.5,
+                    description: "Gamma 4B - Fast and lightweight for mobile devices".to_string(),
+                    min_memory_gb: 4.0,
+                    recommended_memory_gb: 6.0,
+                    quantization: "Q4_K_M".to_string(),
+                    download_url: "https://models.williw.ai/gamma-4b-q4km.gguf".to_string(),
+                    checksum: "sha256:ghi789...".to_string(),
+                },
+                ModelManifestEntry {
+                    id: Uuid::parse_str("11111111-1111-1111-1111-111111111104").unwrap(),
+                    name: "Gamma 7B".to_string(),
+                    model_type: LocalModelType::Gamma4,
+                    size_gb: 4.3,
+                    description: "Gamma 7B - Balanced performance for smartphones".to_string(),
+                    min_memory_gb: 6.0,
+                    recommended_memory_gb: 8.0,
+                    quantization: "Q4_K_M".to_string(),
+                    download_url: "https://models.williw.ai/gamma-7b-q4km.gguf".to_string(),
+                    checksum: "sha256:jkl012...".to_string(),
+                },
+                ModelManifestEntry {
+                    id: Uuid::parse_str("11111111-1111-1111-1111-111111111105").unwrap(),
+                    name: "Phi-3.5 Mini".to_string(),
+                    model_type: LocalModelType::Phi35,
+                    size_gb: 2.3,
+                    description: "Microsoft Phi-3.5 Mini - High quality small model".to_string(),
+                    min_memory_gb: 4.0,
+                    recommended_memory_gb: 6.0,
+                    quantization: "Q4_K_M".to_string(),
+                    download_url: "https://models.williw.ai/phi35-mini-q4km.gguf".to_string(),
+                    checksum: "sha256:mno345...".to_string(),
+                },
+                ModelManifestEntry {
+                    id: Uuid::parse_str("11111111-1111-1111-1111-111111111106").unwrap(),
+                    name: "Qwen 2.5 7B".to_string(),
+                    model_type: LocalModelType::Qwen25,
+                    size_gb: 4.4,
+                    description: "Alibaba Qwen 2.5 7B - Strong multilingual support".to_string(),
+                    min_memory_gb: 6.0,
+                    recommended_memory_gb: 8.0,
+                    quantization: "Q4_K_M".to_string(),
+                    download_url: "https://models.williw.ai/qwen25-7b-q4km.gguf".to_string(),
+                    checksum: "sha256:pqr678...".to_string(),
+                },
+                ModelManifestEntry {
+                    id: Uuid::parse_str("11111111-1111-1111-1111-111111111107").unwrap(),
+                    name: "Yi 6B".to_string(),
+                    model_type: LocalModelType::Yi,
+                    size_gb: 3.8,
+                    description: "Yi 6B - Excellent English and Chinese".to_string(),
+                    min_memory_gb: 6.0,
+                    recommended_memory_gb: 8.0,
+                    quantization: "Q4_K_M".to_string(),
+                    download_url: "https://models.williw.ai/yi-6b-q4km.gguf".to_string(),
+                    checksum: "sha256:stu901...".to_string(),
+                },
+                ModelManifestEntry {
+                    id: Uuid::parse_str("11111111-1111-1111-1111-111111111108").unwrap(),
+                    name: "DeepSeek 7B".to_string(),
+                    model_type: LocalModelType::Deepseek,
+                    size_gb: 4.1,
+                    description: "DeepSeek 7B - Great for coding and math".to_string(),
+                    min_memory_gb: 6.0,
+                    recommended_memory_gb: 8.0,
+                    quantization: "Q4_K_M".to_string(),
+                    download_url: "https://models.williw.ai/deepseek-7b-q4km.gguf".to_string(),
+                    checksum: "sha256:vwx234...".to_string(),
+                },
+                ModelManifestEntry {
+                    id: Uuid::parse_str("11111111-1111-1111-1111-111111111109").unwrap(),
+                    name: "Llama 3.2 3B".to_string(),
+                    model_type: LocalModelType::Llama,
+                    size_gb: 1.9,
+                    description: "Meta Llama 3.2 3B - Efficient instruction following".to_string(),
+                    min_memory_gb: 4.0,
+                    recommended_memory_gb: 6.0,
+                    quantization: "Q4_K_M".to_string(),
+                    download_url: "https://models.williw.ai/llama32-3b-q4km.gguf".to_string(),
+                    checksum: "sha256:yza567...".to_string(),
+                },
+                ModelManifestEntry {
+                    id: Uuid::parse_str("11111111-1111-1111-1111-111111111110").unwrap(),
+                    name: "Mistral 7B".to_string(),
+                    model_type: LocalModelType::Mistral,
+                    size_gb: 4.3,
+                    description: "Mistral 7B - Well-rounded performance".to_string(),
+                    min_memory_gb: 6.0,
+                    recommended_memory_gb: 8.0,
+                    quantization: "Q4_K_M".to_string(),
+                    download_url: "https://models.williw.ai/mistral-7b-q4km.gguf".to_string(),
+                    checksum: "sha256:bcd890...".to_string(),
+                },
+                ModelManifestEntry {
+                    id: Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap(),
+                    name: "Gemma 2B".to_string(),
+                    model_type: LocalModelType::Gemma,
+                    size_gb: 1.4,
+                    description: "Google Gemma 2B - Google's efficient model".to_string(),
+                    min_memory_gb: 3.0,
+                    recommended_memory_gb: 4.0,
+                    quantization: "Q4_K_M".to_string(),
+                    download_url: "https://models.williw.ai/gemma-2b-q4km.gguf".to_string(),
+                    checksum: "sha256:efg123...".to_string(),
+                },
+            ],
+        }
+    }
+}
