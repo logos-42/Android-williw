@@ -10,14 +10,13 @@ use crate::AppState;
 use crate::services::PaymentService;
 use williw_shared::{ApiResponse, Order, PaymentMethod, PaymentRequest, PaymentResponse};
 
-pub fn routes(state: Arc<AppState>) -> Router {
+pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/create", post(create_order))
         .route("/initiate", post(initiate_payment))
         .route("/status/:id", get(get_payment_status))
         .route("/orders", get(get_user_orders))
         .route("/callback/:provider", post(payment_callback))
-        .with_state(state)
 }
 
 /// 创建订单处理器

@@ -1,7 +1,7 @@
 use axum::{
     Router,
     routing::{get, post},
-    extract::{State, Json, Extension},
+    extract::{Json, Extension},
 };
 use std::sync::Arc;
 use uuid::Uuid;
@@ -11,20 +11,17 @@ use crate::models::{LoginRequest, LoginResponse, ProfileResponse};
 use crate::services::AuthService;
 use williw_shared::{ApiResponse, User};
 
-pub fn routes() -> Router<Arc<AppState>> {
+pub fn routes() -> Router {
     Router::new()
         .route("/wallet/login", post(wallet_login))
         .route("/wallet/verify", post(verify_wallet))
         .route("/profile", get(get_profile))
 }
 
-/// 钱包登录处理器
-/// 验证钱包签名并返回JWT令牌
 async fn wallet_login(
-    State(state): State<Arc<AppState>>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(req): Json<LoginRequest>,
 ) -> Json<ApiResponse<LoginResponse>> {
-    // 验证钱包地址格式
     if !wallet::is_valid_eth_address(&req.wallet_address) {
         return Json(ApiResponse::error("Invalid wallet address format"));
     }
@@ -41,8 +38,6 @@ async fn wallet_login(
     }
 }
 
-/// 验证钱包签名处理器
-/// 验证钱包地址格式是否有效
 async fn verify_wallet(
     Json(req): Json<crate::models::VerifyRequest>,
 ) -> Json<ApiResponse<bool>> {
@@ -55,10 +50,8 @@ async fn verify_wallet(
     Json(ApiResponse::success(true))
 }
 
-/// 获取用户资料处理器
-/// 返回当前登录用户的详细信息
 async fn get_profile(
-    State(state): State<Arc<AppState>>,
+    Extension(state): Extension<Arc<AppState>>,
     Extension(user_id): Extension<Uuid>,
 ) -> Json<ApiResponse<ProfileResponse>> {
     let service = AuthService::new(state.db.clone());

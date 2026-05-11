@@ -13,7 +13,7 @@ use williw_shared::{
     InferenceResponse, ModelManifest, DownloadRequest, LocalModelStatus,
 };
 
-pub fn routes(state: Arc<AppState>) -> Router {
+pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/models", get(list_local_models))
         .route("/models/:id", get(get_local_model))
@@ -26,7 +26,6 @@ pub fn routes(state: Arc<AppState>) -> Router {
         .route("/server/start", post(start_local_server))
         .route("/server/stop", post(stop_local_server))
         .route("/server/config", get(get_server_config).post(update_server_config))
-        .with_state(state)
 }
 
 /// 获取本地模型列表处理器

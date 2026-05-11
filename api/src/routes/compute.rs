@@ -11,13 +11,12 @@ use crate::models::{ComputeRequestCreate, ModelFilterParams};
 use crate::services::ModelService;
 use williw_shared::{ApiResponse, AiModel, ComputeRequest, ModelFilter};
 
-pub fn routes(state: Arc<AppState>) -> Router {
+pub fn routes() -> Router {
     Router::new()
         .route("/models", get(list_models))
         .route("/models/:id", get(get_model))
         .route("/request", post(create_compute_request))
         .route("/status/:id", get(get_compute_status))
-        .with_state(state)
 }
 
 /// 获取AI模型列表处理器
