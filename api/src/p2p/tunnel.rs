@@ -256,7 +256,7 @@ impl TunnelManager {
             let tunnel = Tunnel {
                 tunnel_id: tunnel_id.clone(),
                 peer_id: host_peer_id.to_string(),
-                local_endpoint: turn_client.local_addr,
+                local_endpoint: turn_client.local_addr(),
                 remote_endpoint: relay_addr,
                 relay_used: true,
                 established_at: std::time::Instant::now(),

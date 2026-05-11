@@ -9,6 +9,18 @@ use crate::AppState;
 use crate::services::P2pService;
 use williw_shared::{ApiResponse, P2pConfig, P2pConnectionInfo, P2pStatus, P2pTunnelRequest, P2pTunnelResponse};
 
+/// 创建P2P网络相关路由
+/// 
+/// 路由列表:
+/// - GET /status - 获取P2P状态
+/// - GET/POST /config - 获取/更新P2P配置
+/// - POST /online - 上线
+/// - POST /offline - 下线
+/// - GET /connection-info - 获取连接信息
+/// - POST /connect/:peer_id - 连接到对等节点
+/// - POST /share - 共享连接
+/// - DELETE /tunnel/:tunnel_id - 断开隧道
+/// - GET /test - 测试连接
 pub fn routes() -> Router {
     Router::new()
         .route("/status", get(get_p2p_status))
@@ -22,6 +34,7 @@ pub fn routes() -> Router {
         .route("/test", get(test_connection))
 }
 
+/// 获取P2P状态处理器
 async fn get_p2p_status(
     State(state): State<Arc<AppState>>,
 ) -> Json<ApiResponse<P2pStatus>> {
@@ -33,6 +46,7 @@ async fn get_p2p_status(
     }
 }
 
+/// 获取P2P配置处理器
 async fn get_p2p_config(
     State(state): State<Arc<AppState>>,
 ) -> Json<ApiResponse<P2pConfig>> {
@@ -44,6 +58,7 @@ async fn get_p2p_config(
     }
 }
 
+/// 更新P2P配置处理器
 async fn update_p2p_config(
     State(state): State<Arc<AppState>>,
     Json(config): Json<P2pConfig>,
@@ -56,6 +71,7 @@ async fn update_p2p_config(
     }
 }
 
+/// P2P上线处理器
 async fn p2p_go_online(
     State(state): State<Arc<AppState>>,
 ) -> Json<ApiResponse<P2pConnectionInfo>> {
@@ -67,6 +83,7 @@ async fn p2p_go_online(
     }
 }
 
+/// P2P下线处理器
 async fn p2p_go_offline(
     State(state): State<Arc<AppState>>,
 ) -> Json<ApiResponse<String>> {
@@ -78,6 +95,7 @@ async fn p2p_go_offline(
     }
 }
 
+/// 获取连接信息处理器
 async fn get_connection_info(
     State(state): State<Arc<AppState>>,
 ) -> Json<ApiResponse<P2pConnectionInfo>> {
@@ -89,6 +107,7 @@ async fn get_connection_info(
     }
 }
 
+/// 连接到对等节点处理器
 async fn connect_to_peer(
     State(state): State<Arc<AppState>>,
     Path(peer_id): Path<String>,
@@ -101,6 +120,7 @@ async fn connect_to_peer(
     }
 }
 
+/// 共享连接处理器
 async fn share_connection(
     State(state): State<Arc<AppState>>,
     Json(req): Json<P2pTunnelRequest>,
@@ -113,6 +133,7 @@ async fn share_connection(
     }
 }
 
+/// 断开隧道处理器
 async fn disconnect_tunnel(
     State(state): State<Arc<AppState>>,
     Path(tunnel_id): Path<String>,
@@ -125,6 +146,7 @@ async fn disconnect_tunnel(
     }
 }
 
+/// 测试连接处理器
 async fn test_connection(
     State(state): State<Arc<AppState>>,
 ) -> Json<ApiResponse<williw_shared::ConnectionQuality>> {

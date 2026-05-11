@@ -4,15 +4,26 @@ use uuid::Uuid;
 use chrono::Utc;
 use std::sync::Arc;
 
+/// 支付服务
+/// 处理订单创建、支付和回调
 pub struct PaymentService {
+    /// 数据库连接
     db: Arc<Database>,
 }
 
 impl PaymentService {
+    /// 创建支付服务实例
     pub fn new(db: Arc<Database>) -> Self {
         Self { db }
     }
 
+    /// 创建订单
+    /// 
+    /// # 参数
+    /// * `user_id` - 用户ID
+    /// * `model_id` - 模型ID
+    /// * `amount` - 购买数量
+    /// * `method` - 支付方式
     pub async fn create_order(
         &self,
         user_id: Uuid,
@@ -39,16 +50,24 @@ impl PaymentService {
         Ok(order)
     }
 
+    /// 发起支付
+    /// 根据支付方式生成支付二维码或加密货币地址
+    /// 
+    /// # 参数
+    /// * `order_id` - 订单ID
+    /// * `method` - 支付方式
     pub async fn initiate_payment(
         &self,
         order_id: Uuid,
         method: PaymentMethod,
     ) -> Result<PaymentResponse, String> {
+        // 获取订单信息
         let order = self.db.get_order(&order_id)
             .await
             .map_err(|e| format!("{}", e))?
             .ok_or("Order not found")?;
 
+        // 获取模型信息计算总价
         let model = self.db.get_model_by_id(&order.model_id)
             .await
             .map_err(|e| format!("{}", e))?
@@ -56,6 +75,7 @@ impl PaymentService {
 
         let total_price = order.amount * model.price_per_unit;
 
+        // 根据支付方式生成响应
         match method {
             PaymentMethod::Wechat => Ok(PaymentResponse {
                 qr_code: Some(format!("wechat://pay?amount={}", total_price)),
@@ -105,18 +125,31 @@ impl PaymentService {
         }
     }
 
+    /// 获取订单状态
+    /// 
+    /// # 参数
+    /// * `order_id` - 订单ID
     pub async fn get_order_status(&self, order_id: Uuid) -> Result<Option<Order>, String> {
         self.db.get_order(&order_id)
             .await
             .map_err(|e| format!("{}", e))
     }
 
+    /// 确认支付
+    /// 在支付回调成功后更新订单状态
+    /// 
+    /// # 参数
+    /// * `order_id` - 订单ID
     pub async fn confirm_payment(&self, order_id: Uuid) -> Result<(), String> {
         self.db.update_order_status(&order_id, OrderStatus::Paid)
             .await
             .map_err(|e| format!("{}", e))
     }
 
+    /// 获取用户订单列表
+    /// 
+    /// # 参数
+    /// * `user_id` - 用户ID
     pub async fn get_user_orders(&self, user_id: Uuid) -> Result<Vec<Order>, String> {
         self.db.get_user_orders(&user_id)
             .await

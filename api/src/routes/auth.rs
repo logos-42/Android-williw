@@ -11,6 +11,12 @@ use crate::models::{LoginRequest, LoginResponse, ProfileResponse};
 use crate::services::AuthService;
 use williw_shared::{ApiResponse, User};
 
+/// 创建认证相关路由
+/// 
+/// 路由列表:
+/// - POST /wallet/login - 钱包登录
+/// - POST /wallet/verify - 验证钱包签名
+/// - GET /profile - 获取用户资料
 pub fn routes() -> Router {
     Router::new()
         .route("/wallet/login", post(wallet_login))
@@ -18,10 +24,13 @@ pub fn routes() -> Router {
         .route("/profile", get(get_profile))
 }
 
+/// 钱包登录处理器
+/// 验证钱包签名并返回JWT令牌
 async fn wallet_login(
     State(state): State<Arc<AppState>>,
     Json(req): Json<LoginRequest>,
 ) -> Json<ApiResponse<LoginResponse>> {
+    // 验证钱包地址格式
     if !wallet::is_valid_eth_address(&req.wallet_address) {
         return Json(ApiResponse::error("Invalid wallet address format"));
     }
@@ -38,6 +47,8 @@ async fn wallet_login(
     }
 }
 
+/// 验证钱包签名处理器
+/// 验证钱包地址格式是否有效
 async fn verify_wallet(
     Json(req): Json<crate::models::VerifyRequest>,
 ) -> Json<ApiResponse<bool>> {
@@ -50,6 +61,8 @@ async fn verify_wallet(
     Json(ApiResponse::success(true))
 }
 
+/// 获取用户资料处理器
+/// 返回当前登录用户的详细信息
 async fn get_profile(
     State(state): State<Arc<AppState>>,
     Extension(user_id): Extension<Uuid>,

@@ -21,7 +21,7 @@ pub struct TurnClient {
     /// UDP套接字
     socket: UdpSocket,
     /// 本地地址
-    local_addr: SocketAddr,
+    pub local_addr: SocketAddr,
     /// TURN服务器地址
     server_addr: SocketAddr,
     /// 用户名
@@ -36,7 +36,7 @@ pub struct TurnClient {
 
 impl TurnClient {
     /// 创建TURN客户端
-    /// 
+    ///
     /// # 参数
     /// * `local_port` - 本地监听端口，0表示随机端口
     /// * `server` - TURN服务器配置
@@ -52,9 +52,11 @@ impl TurnClient {
             .set_nonblocking(false)
             .map_err(|e| format!("Failed to set non-blocking: {}", e))?;
 
+        let local_addr = socket.local_addr().map_err(|e| e.to_string())?;
+
         Ok(Self {
             socket,
-            local_addr: socket.local_addr().map_err(|e| e.to_string())?,
+            local_addr,
             server_addr,
             username: server.username.clone(),
             password: server.password.clone(),
@@ -103,7 +105,8 @@ impl TurnClient {
         // 添加用户名属性（如果提供）
         if let (Some(username), Some(_)) = (&self.username, &self.password) {
             let user_bytes = username.as_bytes();
-            request[offset..offset + 4].copy_from_slice(&SOFTWARE_ATTRIBUTE);
+            request[offset..offset + 2].copy_from_slice(&SOFTWARE_ATTRIBUTE);
+            request[offset + 2..offset + 4].copy_from_slice(&4u16.to_be_bytes());
             request[offset + 4] = 0;
             request[offset + 5] = ((user_bytes.len() + 4) as u8).min(128) as u8;
             offset += 4;
@@ -199,8 +202,8 @@ impl TurnClient {
         request[8..20].copy_from_slice(&transaction_id);
 
         // XOR对等地址属性
-        request[TURN_HEADER_SIZE..TURN_HEADER_SIZE + 4].copy_from_slice(&XOR_PEER_ADDRESS_ATTRIBUTE);
-        request[TURN_HEADER_SIZE + 4..TURN_HEADER_SIZE + 8].copy_from_slice(&8u16.to_be_bytes());
+        request[TURN_HEADER_SIZE..TURN_HEADER_SIZE + 2].copy_from_slice(&XOR_PEER_ADDRESS_ATTRIBUTE);
+        request[TURN_HEADER_SIZE + 2..TURN_HEADER_SIZE + 4].copy_from_slice(&8u16.to_be_bytes());
         request[TURN_HEADER_SIZE + 8] = 0x01;
 
         let peer_port = 0u16 ^ ((MAGIC_COOKIE >> 16) as u16);
@@ -268,6 +271,11 @@ impl TurnClient {
     pub fn relayed_address(&self) -> Option<SocketAddr> {
         self.relayed_addr
     }
+
+    /// 获取本地地址
+    pub fn local_addr(&self) -> SocketAddr {
+        self.local_addr
+    }
 }
 
 /// TURN协议魔术cookie
@@ -275,9 +283,9 @@ const MAGIC_COOKIE: u32 = 0x2112A442;
 /// XOR中继地址属性类型
 const XOR_RELAYED_ADDRESS: u16 = 0x0016;
 /// XOR对等地址属性类型
-const XOR_PEER_ADDRESS_ATTRIBUTE: u16 = 0x0020;
+const XOR_PEER_ADDRESS_ATTRIBUTE: [u8; 2] = 0x0020u16.to_be_bytes();
 /// 软件属性类型
-const SOFTWARE_ATTRIBUTE: u16 = 0x8022;
+const SOFTWARE_ATTRIBUTE: [u8; 2] = 0x8022u16.to_be_bytes();
 
 /// 解析TURN服务器URL
 /// 支持 "turn:host:port"、"turn://host:port" 或 "host:port" 格式

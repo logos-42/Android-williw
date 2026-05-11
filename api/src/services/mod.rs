@@ -1,3 +1,6 @@
+/// 服务模块
+/// 包含各种业务逻辑服务
+
 pub mod auth_service;
 pub mod model_service;
 pub mod payment_service;

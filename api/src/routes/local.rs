@@ -13,6 +13,20 @@ use williw_shared::{
     InferenceResponse, ModelManifest, DownloadRequest, LocalModelStatus,
 };
 
+/// 创建本地模型相关路由
+/// 
+/// 路由列表:
+/// - GET /models - 获取本地模型列表
+/// - GET /models/:id - 获取指定模型详情
+/// - POST /models/download - 下载模型
+/// - DELETE /models/:id/delete - 删除模型
+/// - POST /models/:id/set-default - 设置默认模型
+/// - GET /manifest - 获取模型清单
+/// - POST /inference - 运行推理
+/// - GET /device-info - 获取设备信息
+/// - POST /server/start - 启动本地服务器
+/// - POST /server/stop - 停止本地服务器
+/// - GET/POST /server/config - 获取/更新服务器配置
 pub fn routes() -> Router {
     Router::new()
         .route("/models", get(list_local_models))
@@ -28,6 +42,7 @@ pub fn routes() -> Router {
         .route("/server/config", get(get_server_config).post(update_server_config))
 }
 
+/// 获取本地模型列表处理器
 async fn list_local_models(
     State(state): State<Arc<AppState>>,
 ) -> Json<ApiResponse<Vec<LocalModel>>> {
@@ -39,6 +54,7 @@ async fn list_local_models(
     }
 }
 
+/// 获取指定本地模型详情处理器
 async fn get_local_model(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
@@ -52,6 +68,7 @@ async fn get_local_model(
     }
 }
 
+/// 下载模型处理器
 async fn download_model(
     State(state): State<Arc<AppState>>,
     Json(req): Json<DownloadRequest>,
@@ -64,6 +81,7 @@ async fn download_model(
     }
 }
 
+/// 删除本地模型处理器
 async fn delete_model(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
@@ -76,6 +94,7 @@ async fn delete_model(
     }
 }
 
+/// 设置默认模型处理器
 async fn set_default_model(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
@@ -88,10 +107,12 @@ async fn set_default_model(
     }
 }
 
+/// 获取模型清单处理器
 async fn get_model_manifest() -> Json<ApiResponse<ModelManifest>> {
     Json(ApiResponse::success(ModelManifest::default_manifest()))
 }
 
+/// 运行推理处理器
 async fn run_inference(
     State(state): State<Arc<AppState>>,
     Json(req): Json<InferenceRequest>,
@@ -104,6 +125,7 @@ async fn run_inference(
     }
 }
 
+/// 获取设备信息处理器
 async fn get_device_info(
     State(state): State<Arc<AppState>>,
 ) -> Json<ApiResponse<DeviceInfo>> {
@@ -115,6 +137,7 @@ async fn get_device_info(
     }
 }
 
+/// 启动本地服务器处理器
 async fn start_local_server(
     State(state): State<Arc<AppState>>,
 ) -> Json<ApiResponse<String>> {
@@ -126,6 +149,7 @@ async fn start_local_server(
     }
 }
 
+/// 停止本地服务器处理器
 async fn stop_local_server(
     State(state): State<Arc<AppState>>,
 ) -> Json<ApiResponse<String>> {
@@ -137,6 +161,7 @@ async fn stop_local_server(
     }
 }
 
+/// 获取本地API服务器配置处理器
 async fn get_server_config(
     State(state): State<Arc<AppState>>,
 ) -> Json<ApiResponse<LocalApiConfig>> {
@@ -148,6 +173,7 @@ async fn get_server_config(
     }
 }
 
+/// 更新本地API服务器配置处理器
 async fn update_server_config(
     State(state): State<Arc<AppState>>,
     Json(config): Json<LocalApiConfig>,

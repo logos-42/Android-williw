@@ -11,6 +11,13 @@ use crate::models::{ComputeRequestCreate, ModelFilterParams};
 use crate::services::ModelService;
 use williw_shared::{ApiResponse, AiModel, ComputeRequest, ModelFilter};
 
+/// 创建计算资源相关路由
+/// 
+/// 路由列表:
+/// - GET /models - 获取AI模型列表（支持过滤）
+/// - GET /models/:id - 获取指定模型详情
+/// - POST /request - 创建计算请求
+/// - GET /status/:id - 获取计算请求状态
 pub fn routes() -> Router {
     Router::new()
         .route("/models", get(list_models))
@@ -19,6 +26,8 @@ pub fn routes() -> Router {
         .route("/status/:id", get(get_compute_status))
 }
 
+/// 获取AI模型列表处理器
+/// 支持按类别、提供商、算力和价格过滤
 async fn list_models(
     State(state): State<Arc<AppState>>,
     Query(params): Query<ModelFilterParams>,
@@ -32,6 +41,7 @@ async fn list_models(
     }
 }
 
+/// 获取指定模型详情处理器
 async fn get_model(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
@@ -45,6 +55,7 @@ async fn get_model(
     }
 }
 
+/// 创建计算请求处理器
 async fn create_compute_request(
     State(state): State<Arc<AppState>>,
     Extension(user_id): Extension<Uuid>,
@@ -58,6 +69,7 @@ async fn create_compute_request(
     }
 }
 
+/// 获取计算请求状态处理器
 async fn get_compute_status(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,

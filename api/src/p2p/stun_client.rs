@@ -339,7 +339,8 @@ pub fn stun_test(server_url: &str) -> Result<NatDiscoveryResult, String> {
 /// 异步STUN测试
 /// 在后台线程执行NAT发现
 pub async fn stun_test_async(server_url: &str) -> Result<NatDiscoveryResult, String> {
-    tokio::task::spawn_blocking(move || stun_test(server_url))
+    let server_url = server_url.to_string();
+    tokio::task::spawn_blocking(move || stun_test(&server_url))
         .await
         .map_err(|e| format!("Task join error: {}", e))?
 }

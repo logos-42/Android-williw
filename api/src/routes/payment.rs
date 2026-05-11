@@ -10,6 +10,14 @@ use crate::AppState;
 use crate::services::PaymentService;
 use williw_shared::{ApiResponse, Order, PaymentMethod, PaymentRequest, PaymentResponse};
 
+/// 创建支付相关路由
+/// 
+/// 路由列表:
+/// - POST /create - 创建订单
+/// - POST /initiate - 发起支付
+/// - GET /status/:id - 获取支付状态
+/// - GET /orders - 获取用户订单列表
+/// - POST /callback/:provider - 支付回调
 pub fn routes() -> Router {
     Router::new()
         .route("/create", post(create_order))
@@ -19,6 +27,7 @@ pub fn routes() -> Router {
         .route("/callback/:provider", post(payment_callback))
 }
 
+/// 创建订单处理器
 async fn create_order(
     State(state): State<Arc<AppState>>,
     Extension(user_id): Extension<Uuid>,
@@ -32,6 +41,7 @@ async fn create_order(
     }
 }
 
+/// 发起支付处理器
 async fn initiate_payment(
     State(state): State<Arc<AppState>>,
     Json(req): Json<PaymentRequest>,
@@ -44,6 +54,7 @@ async fn initiate_payment(
     }
 }
 
+/// 获取支付状态处理器
 async fn get_payment_status(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
@@ -57,6 +68,7 @@ async fn get_payment_status(
     }
 }
 
+/// 获取用户订单列表处理器
 async fn get_user_orders(
     State(state): State<Arc<AppState>>,
     Extension(user_id): Extension<Uuid>,
@@ -69,6 +81,8 @@ async fn get_user_orders(
     }
 }
 
+/// 支付回调处理器
+/// 处理来自支付宝、微信等支付渠道的回调通知
 async fn payment_callback(
     State(state): State<Arc<AppState>>,
     Path(provider): Path<String>,
@@ -76,6 +90,7 @@ async fn payment_callback(
 ) -> Json<ApiResponse<String>> {
     let service = PaymentService::new(state.db.clone());
 
+    // 从回调payload中提取订单ID
     if let Some(order_id) = payload.get("order_id").and_then(|v| v.as_str()) {
         if let Ok(uuid) = Uuid::parse_str(order_id) {
             if let Err(e) = service.confirm_payment(uuid).await {

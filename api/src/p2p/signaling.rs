@@ -52,7 +52,7 @@ impl SignalingClient {
             .await
             .map_err(|e| format!("WebSocket connection failed: {}", e))?;
 
-        let (write, read) = ws_stream.split();
+        let (mut write, read) = ws_stream.split();
 
         // 创建双向消息通道
         let (tx, rx) = mpsc::channel::<SignalingMessage>(100);
@@ -259,8 +259,18 @@ impl SignalingClient {
     /// # 参数
     /// * `client_peer_id` - 客户端节点ID
     pub async fn accept_connection(&mut self, client_peer_id: &str) -> Result<TunnelEstablished, String> {
+        let tunnel_id = uuid::Uuid::new_v4().to_string();
+        let tunnel = TunnelEstablished {
+            tunnel_id: tunnel_id.clone(),
+            local_endpoint: format!("0.0.0.0:0"),
+            remote_endpoint: format!("wss://{}.williw.ai", client_peer_id),
+            relay_used: true,
+            connection_quality: ConnectionQuality::Good,
+        };
+
         let payload = serde_json::json!({
             "client_peer_id": client_peer_id,
+            "tunnel_id": tunnel_id,
             "relay_used": true,
             "connection_quality": "good"
         });
@@ -273,7 +283,8 @@ impl SignalingClient {
             timestamp: chrono::Utc::now(),
         };
 
-        self.send(msg).await
+        self.send(msg).await?;
+        Ok(tunnel)
     }
 
     /// 发送心跳保活消息

@@ -6,7 +6,8 @@ use uuid::Uuid;
 use chrono::Utc;
 use williw_shared::*;
 
-use crate::p2p::{TunnelManager, TunnelConnection, StunServer, TurnServer};
+use crate::p2p::{TunnelManager, TunnelConnection};
+use williw_shared::{StunServer, TurnServer};
 
 /// P2P服务结构体，管理点对点连接和隧道
 pub struct P2pService {
