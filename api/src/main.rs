@@ -64,16 +64,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .allow_methods(Any)
         .allow_headers(Any);
 
+    let state = Arc::new(state);
     let app = Router::new()
-        .nest("/api/auth", routes::auth::routes())
-        .nest("/api/compute", routes::compute::routes())
-        .nest("/api/payment", routes::payment::routes())
-        .nest("/api/local", routes::local::routes())
-        .nest("/api/p2p", routes::p2p::routes())
+        .nest("/api/auth", routes::auth::routes(state.clone()))
+        .nest("/api/compute", routes::compute::routes(state.clone()))
+        .nest("/api/payment", routes::payment::routes(state.clone()))
+        .nest("/api/local", routes::local::routes(state.clone()))
+        .nest("/api/p2p", routes::p2p::routes(state.clone()))
         .route("/health", axum::routing::get(|| async { "OK" }))
         .layer(cors)
-        .layer(TraceLayer::new_for_http())
-        .with_state(Arc::new(state));
+        .layer(TraceLayer::new_for_http());
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
     tracing::info!("Williw API server running on http://0.0.0.0:8080");

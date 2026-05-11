@@ -13,21 +13,7 @@ use williw_shared::{
     InferenceResponse, ModelManifest, DownloadRequest, LocalModelStatus,
 };
 
-/// 创建本地模型相关路由
-/// 
-/// 路由列表:
-/// - GET /models - 获取本地模型列表
-/// - GET /models/:id - 获取指定模型详情
-/// - POST /models/download - 下载模型
-/// - DELETE /models/:id/delete - 删除模型
-/// - POST /models/:id/set-default - 设置默认模型
-/// - GET /manifest - 获取模型清单
-/// - POST /inference - 运行推理
-/// - GET /device-info - 获取设备信息
-/// - POST /server/start - 启动本地服务器
-/// - POST /server/stop - 停止本地服务器
-/// - GET/POST /server/config - 获取/更新服务器配置
-pub fn routes() -> Router {
+pub fn routes(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/models", get(list_local_models))
         .route("/models/:id", get(get_local_model))
@@ -40,6 +26,7 @@ pub fn routes() -> Router {
         .route("/server/start", post(start_local_server))
         .route("/server/stop", post(stop_local_server))
         .route("/server/config", get(get_server_config).post(update_server_config))
+        .with_state(state)
 }
 
 /// 获取本地模型列表处理器

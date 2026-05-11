@@ -213,16 +213,13 @@ impl P2pService {
     /// 获取详细连接信息
     /// 返回peer信息列表、公网端点和连接质量评估
     pub async fn get_connection_info(&self) -> Result<P2pConnectionInfo, String> {
-        // 检查是否在线
         if !self.is_online.load(Ordering::SeqCst) {
             return Err("P2P service is offline. Call go_online first.".to_string());
         }
 
-        // 获取所有已连接节点信息
         let peers = self.connected_peers.read().await;
         let peer_list: Vec<PeerInfo> = peers.values().cloned().collect();
 
-        // 获取NAT穿透信息，构建公网端点
         let tunnel_guard = self.tunnel_manager.read().await;
         let nat_info = tunnel_guard.as_ref().and_then(|m| m.get_nat_info());
 

@@ -11,19 +11,13 @@ use crate::models::{ComputeRequestCreate, ModelFilterParams};
 use crate::services::ModelService;
 use williw_shared::{ApiResponse, AiModel, ComputeRequest, ModelFilter};
 
-/// 创建计算资源相关路由
-/// 
-/// 路由列表:
-/// - GET /models - 获取AI模型列表（支持过滤）
-/// - GET /models/:id - 获取指定模型详情
-/// - POST /request - 创建计算请求
-/// - GET /status/:id - 获取计算请求状态
-pub fn routes() -> Router {
+pub fn routes(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/models", get(list_models))
         .route("/models/:id", get(get_model))
         .route("/request", post(create_compute_request))
         .route("/status/:id", get(get_compute_status))
+        .with_state(state)
 }
 
 /// 获取AI模型列表处理器

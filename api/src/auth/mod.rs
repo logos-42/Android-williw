@@ -3,3 +3,5 @@
 
 pub mod jwt;
 pub mod wallet;
+
+pub use jwt::{create_token, verify_token, extract_user_id};

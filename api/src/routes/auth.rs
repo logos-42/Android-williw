@@ -11,13 +11,7 @@ use crate::models::{LoginRequest, LoginResponse, ProfileResponse};
 use crate::services::AuthService;
 use williw_shared::{ApiResponse, User};
 
-/// 创建认证相关路由
-/// 
-/// 路由列表:
-/// - POST /wallet/login - 钱包登录
-/// - POST /wallet/verify - 验证钱包签名
-/// - GET /profile - 获取用户资料
-pub fn routes() -> Router {
+pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/wallet/login", post(wallet_login))
         .route("/wallet/verify", post(verify_wallet))

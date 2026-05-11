@@ -124,6 +124,7 @@ impl LocalModelService {
             .find(|m| m.id == model_id)
             .ok_or("Model not found in manifest")?;
 
+        let model_name = entry.name.clone();
         let model = LocalModel {
             id: entry.id,
             name: entry.name,
@@ -132,7 +133,7 @@ impl LocalModelService {
             status: LocalModelStatus::Ready,
             download_progress: Some(100.0),
             download_url: entry.download_url,
-            local_path: Some(format!("/models/{}.gguf", entry.name.replace(" ", "_").to_lowercase())),
+            local_path: Some(format!("/models/{}.gguf", model_name.replace(" ", "_").to_lowercase())),
             inference_endpoint: Some(format!("http://localhost:8081/v1/chat/completions")),
             is_default: true,
             created_at: Utc::now(),
