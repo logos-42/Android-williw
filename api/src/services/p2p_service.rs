@@ -75,12 +75,13 @@ impl P2pService {
     /// 返回包含peer_id和connection_code的完整配置
     pub async fn get_config(&self) -> P2pConfig {
         let config = self.config.read().await;
+        let connection_code = self.connection_code.read().await.clone();
         P2pConfig {
             enabled: config.enabled,
             tunnel_mode: config.tunnel_mode.clone(),
             stun_servers: config.stun_servers.clone(),
             relay_servers: config.relay_servers.clone(),
-            connection_code: Some(self.connection_code.clone()),
+            connection_code: Some(connection_code),
             peer_id: Some(self.peer_id.clone()),
         }
     }
@@ -88,10 +89,10 @@ impl P2pService {
     /// 更新P2P配置
     /// 新的peer_id和connection_code会被保留，不受配置更新影响
     pub async fn update_config(&self, new_config: P2pConfig) -> P2pConfig {
+        let connection_code = self.connection_code.read().await.clone();
         let mut config = self.config.write().await;
         *config = new_config.clone();
-        // 保留原有的peer_id和connection_code
-        config.connection_code = Some(self.connection_code.clone());
+        config.connection_code = Some(connection_code);
         config.peer_id = Some(self.peer_id.clone());
         config.clone()
     }
@@ -100,6 +101,7 @@ impl P2pService {
     /// 初始化隧道管理器，连接到STUN和TURN服务器
     pub async fn go_online(&self) -> Result<P2pConnectionInfo, String> {
         let config = self.config.read().await.clone();
+        let initial_code = self.connection_code.read().await.clone();
 
         // 将STUN服务器配置转换为内部格式
         let stun_servers = config
@@ -128,7 +130,7 @@ impl P2pService {
         // 创建并初始化隧道管理器
         let mut manager = TunnelManager::new(
             self.peer_id.clone(),
-            self.connection_code.clone(),
+            initial_code,
             config.tunnel_mode,
             stun_servers,
             turn_servers,
@@ -136,7 +138,7 @@ impl P2pService {
 
         // 调用管理器上线，获取新的连接码
         let code = manager.go_online(relay_url).await?;
-        self.connection_code = code;
+        *self.connection_code.write().await = code;
 
         // 保存隧道管理器
         let mut tunnel_mgr = self.tunnel_manager.write().await;
@@ -146,20 +148,20 @@ impl P2pService {
         self.is_online.store(true, Ordering::SeqCst);
 
         // 获取NAT穿透信息，构建公网端点
-        let nat_info = self.tunnel_manager.read().await
-            .as_ref()
-            .and_then(|m| futures::executor::block_on(m.get_nat_info()));
+        let tunnel_guard = self.tunnel_manager.read().await;
+        let nat_info = tunnel_guard.as_ref().and_then(|m| m.get_nat_info());
 
         // 格式化公网端点地址
         let public_endpoint = nat_info
             .map(|n| format!("{}:{}", n.external_ip.clone().unwrap_or_default(), n.external_port.unwrap_or(0)))
-            .filter(|s| !s.contains("0.0.0.0"))
+            .filter(|s: &String| !s.contains("0.0.0.0"))
             .map(|s| format!("wss://{}", s));
 
         // 构建并返回连接信息
+        let connection_code = self.connection_code.read().await.clone();
         let connection_info = P2pConnectionInfo {
             peer_id: self.peer_id.clone(),
-            connection_code: self.connection_code.clone(),
+            connection_code,
             public_endpoint,
             is_connected: true,
             connected_peers: vec![],
@@ -194,15 +196,14 @@ impl P2pService {
     /// 返回在线状态、peer_id、连接码和活跃隧道数量等信息
     pub async fn get_status(&self) -> P2pStatus {
         let active_count = self.active_tunnels.load(Ordering::SeqCst);
-        // 获取NAT穿透信息
-        let nat_info = self.tunnel_manager.read().await
-            .as_ref()
-            .and_then(|m| m.get_nat_info());
+        let tunnel_guard = self.tunnel_manager.read().await;
+        let nat_info = tunnel_guard.as_ref().and_then(|m| m.get_nat_info());
+        let connection_code = self.connection_code.read().await.clone();
 
         P2pStatus {
             is_online: self.is_online.load(Ordering::SeqCst),
             peer_id: self.peer_id.clone(),
-            connection_code: self.connection_code.clone(),
+            connection_code,
             active_tunnels: active_count,
             total_bandwidth_mbps: 0.0,
             relay_usage_percent: nat_info.map(|_| 0.0),
@@ -222,18 +223,18 @@ impl P2pService {
         let peer_list: Vec<PeerInfo> = peers.values().cloned().collect();
 
         // 获取NAT穿透信息，构建公网端点
-        let nat_info = self.tunnel_manager.read().await
-            .as_ref()
-            .and_then(|m| m.get_nat_info());
+        let tunnel_guard = self.tunnel_manager.read().await;
+        let nat_info = tunnel_guard.as_ref().and_then(|m| m.get_nat_info());
 
         let public_endpoint = nat_info
             .map(|n| format!("{}:{}", n.external_ip.clone().unwrap_or_default(), n.external_port.unwrap_or(0)))
-            .filter(|s| !s.contains("0.0.0.0"))
+            .filter(|s: &String| !s.contains("0.0.0.0"))
             .map(|s| format!("wss://{}", s));
 
+        let connection_code = self.connection_code.read().await.clone();
         Ok(P2pConnectionInfo {
             peer_id: self.peer_id.clone(),
-            connection_code: self.connection_code.clone(),
+            connection_code,
             public_endpoint,
             is_connected: true,
             connected_peers: peer_list,
