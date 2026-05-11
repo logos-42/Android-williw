@@ -1,3 +1,6 @@
+/// P2P网络模块
+/// 提供点对点连接所需的STUN、TURN、信令和隧道管理功能
+
 pub mod stun_client;
 pub mod turn_client;
 pub mod signaling;

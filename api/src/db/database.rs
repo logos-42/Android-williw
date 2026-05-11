@@ -3,11 +3,16 @@ use uuid::Uuid;
 use chrono::Utc;
 use williw_shared::*;
 
+/// 数据库连接池封装结构体
+/// 提供与SQLite数据库的连接管理和所有数据库操作
 pub struct Database {
+    /// SQLx连接池
     pool: SqlitePool,
 }
 
 impl Database {
+    /// 创建新的数据库连接实例
+    /// 从环境变量DATABASE_URL获取连接字符串，默认使用sqlite:williw.db
     pub async fn new() -> Result<Self, sqlx::Error> {
         let database_url = std::env::var("DATABASE_URL")
             .unwrap_or_else(|_| "sqlite:williw.db?mode=rwc".to_string());
@@ -20,7 +25,10 @@ impl Database {
         Ok(Self { pool })
     }
 
+    /// 运行数据库迁移，创建所有必要的表
+    /// 包括users、models、orders和compute_requests四张表
     pub async fn run_migrations(&self) -> Result<(), sqlx::Error> {
+        // 创建用户表，存储钱包地址、邮箱和余额
         sqlx::query(
             r#"
             CREATE TABLE IF NOT EXISTS users (
@@ -35,6 +43,7 @@ impl Database {
         .execute(&self.pool)
         .await?;
 
+        // 创建AI模型表，存储模型信息、算力和价格
         sqlx::query(
             r#"
             CREATE TABLE IF NOT EXISTS models (
@@ -53,6 +62,7 @@ impl Database {
         .execute(&self.pool)
         .await?;
 
+        // 创建订单表，记录用户购买计算资源的所有订单
         sqlx::query(
             r#"
             CREATE TABLE IF NOT EXISTS orders (
@@ -74,6 +84,7 @@ impl Database {
         .execute(&self.pool)
         .await?;
 
+        // 创建计算请求表，记录用户对AI模型的调用
         sqlx::query(
             r#"
             CREATE TABLE IF NOT EXISTS compute_requests (
@@ -96,7 +107,10 @@ impl Database {
         Ok(())
     }
 
+    /// 初始化种子数据，向数据库插入默认AI模型列表
+    /// 如果模型表已有数据则跳过
     pub async fn seed_models(&self) -> Result<(), sqlx::Error> {
+        // 检查是否已有模型数据
         let count: i64 = sqlx::query("SELECT COUNT(*) as count FROM models")
             .fetch_one(&self.pool)
             .await?
@@ -106,6 +120,7 @@ impl Database {
             return Ok(());
         }
 
+        // 默认AI模型列表
         let models = vec![
             ("GPT-4 Turbo", "OpenAI", "llm", "Most powerful GPT model for complex tasks", 100.0, 0.03),
             ("GPT-3.5 Turbo", "OpenAI", "llm", "Fast and cost-effective language model", 50.0, 0.002),
@@ -119,6 +134,7 @@ impl Database {
             ("Midjourney v6", "Midjourney", "image", "Artistic image generation", 65.0, 0.035),
         ];
 
+        // 批量插入模型数据
         for (name, provider, category, desc, power, price) in models {
             sqlx::query(
                 r#"INSERT INTO models (id, name, provider, category, description, compute_power, price_per_unit, status, image_url)
@@ -138,6 +154,13 @@ impl Database {
         Ok(())
     }
 
+    /// 根据钱包地址查询用户
+    /// 
+    /// # 参数
+    /// * `wallet` - 钱包地址字符串
+    /// 
+    /// # 返回
+    /// 找到返回User对象，否则返回None
     pub async fn get_user_by_wallet(&self, wallet: &str) -> Result<Option<User>, sqlx::Error> {
         let row = sqlx::query("SELECT * FROM users WHERE wallet_address = ?")
             .bind(wallet)
@@ -155,6 +178,10 @@ impl Database {
         }))
     }
 
+    /// 创建新用户记录
+    /// 
+    /// # 参数
+    /// * `user` - 用户对象引用
     pub async fn create_user(&self, user: &User) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"INSERT INTO users (id, wallet_address, email, balance, created_at)
@@ -170,10 +197,22 @@ impl Database {
         Ok(())
     }
 
+    /// 获取所有AI模型，支持多条件过滤
+    /// 
+    /// # 参数
+    /// * `filter` - 模型过滤条件
+    /// 
+    /// # 过滤条件包括
+    /// * category - 模型类别
+    /// * provider - 提供商
+    /// * min_power - 最小算力
+    /// * max_price - 最大单价
+    /// * search - 名称/描述关键词搜索
     pub async fn get_all_models(&self, filter: &ModelFilter) -> Result<Vec<AiModel>, sqlx::Error> {
         let mut query = "SELECT * FROM models WHERE status = 'active'".to_string();
         let mut params: Vec<String> = vec![];
 
+        // 根据过滤条件动态构建查询
         if let Some(ref cat) = filter.category {
             query.push_str(" AND category = ?");
             params.push(cat.to_string());
@@ -198,6 +237,7 @@ impl Database {
 
         let rows = sqlx::query(&query).fetch_all(&self.pool).await?;
 
+        // 将查询结果映射为AiModel对象
         let models: Vec<AiModel> = rows
             .into_iter()
             .map(|r| AiModel {
@@ -216,6 +256,7 @@ impl Database {
         Ok(models)
     }
 
+    /// 根据ID获取单个AI模型
     pub async fn get_model_by_id(&self, id: &Uuid) -> Result<Option<AiModel>, sqlx::Error> {
         let row = sqlx::query("SELECT * FROM models WHERE id = ?")
             .bind(id.to_string())
@@ -235,6 +276,10 @@ impl Database {
         }))
     }
 
+    /// 创建新订单记录
+    /// 
+    /// # 参数
+    /// * `order` - 订单对象引用
     pub async fn create_order(&self, order: &Order) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"INSERT INTO orders (id, user_id, model_id, amount, payment_method, status, crypto_amount, crypto_currency, created_at, updated_at)
@@ -255,6 +300,7 @@ impl Database {
         Ok(())
     }
 
+    /// 根据ID获取订单详情
     pub async fn get_order(&self, id: &Uuid) -> Result<Option<Order>, sqlx::Error> {
         let row = sqlx::query("SELECT * FROM orders WHERE id = ?")
             .bind(id.to_string())
@@ -279,6 +325,11 @@ impl Database {
         }))
     }
 
+    /// 更新订单状态
+    /// 
+    /// # 参数
+    /// * `id` - 订单UUID
+    /// * `status` - 新状态
     pub async fn update_order_status(&self, id: &Uuid, status: OrderStatus) -> Result<(), sqlx::Error> {
         sqlx::query("UPDATE orders SET status = ?, updated_at = ? WHERE id = ?")
             .bind(serde_json::to_string(&status).unwrap())
@@ -289,6 +340,7 @@ impl Database {
         Ok(())
     }
 
+    /// 获取指定用户的所有订单（按时间倒序）
     pub async fn get_user_orders(&self, user_id: &Uuid) -> Result<Vec<Order>, sqlx::Error> {
         let rows = sqlx::query("SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC")
             .bind(user_id.to_string())
@@ -318,6 +370,10 @@ impl Database {
         Ok(orders)
     }
 
+    /// 创建新的计算请求记录
+    /// 
+    /// # 参数
+    /// * `req` - 计算请求对象引用
     pub async fn create_compute_request(&self, req: &ComputeRequest) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"INSERT INTO compute_requests (id, user_id, model_id, amount, status, result, created_at, updated_at)
@@ -336,6 +392,7 @@ impl Database {
         Ok(())
     }
 
+    /// 根据ID获取计算请求详情
     pub async fn get_compute_request(&self, id: &Uuid) -> Result<Option<ComputeRequest>, sqlx::Error> {
         let row = sqlx::query("SELECT * FROM compute_requests WHERE id = ?")
             .bind(id.to_string())

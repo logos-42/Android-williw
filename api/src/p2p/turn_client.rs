@@ -2,24 +2,44 @@ use std::net::{SocketAddr, UdpSocket};
 use std::time::Duration;
 use williw_shared::TurnServer;
 
+/// TURN协议头部大小（字节）
 const TURN_HEADER_SIZE: usize = 20;
+/// 通道数据消息类型
 const CHANNEL_DATA: u16 = 0x0004;
+/// 分配请求消息类型
 const ALLOCATE_REQUEST: u16 = 0x0003;
+/// 分配响应消息类型
 const ALLOCATE_RESPONSE: u16 = 0x0103;
+/// 创建权限请求消息类型
 const CREATE_PERMISSION_REQUEST: u16 = 0x0008;
+/// 通道绑定请求消息类型
 const CHANNEL_BIND_REQUEST: u16 = 0x0009;
 
+/// TURN客户端
+/// 用于通过中继服务器转发网络流量
 pub struct TurnClient {
+    /// UDP套接字
     socket: UdpSocket,
+    /// 本地地址
     local_addr: SocketAddr,
+    /// TURN服务器地址
     server_addr: SocketAddr,
+    /// 用户名
     username: Option<String>,
+    /// 密码
     password: Option<String>,
+    /// 中继地址（分配后获得）
     relayed_addr: Option<SocketAddr>,
+    /// 超时时间
     timeout: Duration,
 }
 
 impl TurnClient {
+    /// 创建TURN客户端
+    /// 
+    /// # 参数
+    /// * `local_port` - 本地监听端口，0表示随机端口
+    /// * `server` - TURN服务器配置
     pub fn new(local_port: u16, server: &TurnServer) -> Result<Self, String> {
         let server_addr = parse_turn_url(&server.url)
             .ok_or_else(|| format!("Invalid TURN server URL: {}", server.url))?;
@@ -43,6 +63,8 @@ impl TurnClient {
         })
     }
 
+    /// 请求分配中继地址
+    /// 向TURN服务器发送分配请求，获取中继地址
     pub fn allocate(&mut self) -> Result<SocketAddr, String> {
         self.send_allocate_request()?;
 
@@ -62,19 +84,23 @@ impl TurnClient {
         Ok(relayed_addr)
     }
 
+    /// 发送分配请求
     fn send_allocate_request(&self) -> Result<(), String> {
         let mut request = vec![0u8; TURN_HEADER_SIZE + 24];
 
+        // 消息类型
         request[0..2].copy_from_slice(&ALLOCATE_REQUEST.to_be_bytes());
         let msg_len: u16 = 24;
         request[2..4].copy_from_slice(&msg_len.to_be_bytes());
 
+        // 事务ID和魔术cookie
         let transaction_id = generate_transaction_id();
         request[4..8].copy_from_slice(&MAGIC_COOKIE.to_be_bytes());
         request[8..20].copy_from_slice(&transaction_id);
 
         let mut offset = TURN_HEADER_SIZE;
 
+        // 添加用户名属性（如果提供）
         if let (Some(username), Some(_)) = (&self.username, &self.password) {
             let user_bytes = username.as_bytes();
             request[offset..offset + 4].copy_from_slice(&SOFTWARE_ATTRIBUTE);
@@ -84,6 +110,7 @@ impl TurnClient {
             let len = (user_bytes.len() as u8).min(128) as usize;
             request[offset..offset + len].copy_from_slice(&user_bytes[..len]);
             offset += user_bytes.len();
+            // 4字节对齐
             while offset % 4 != 0 {
                 offset += 1;
             }
@@ -99,6 +126,7 @@ impl TurnClient {
         Ok(())
     }
 
+    /// 解析分配响应，提取中继地址
     fn parse_allocation_response(&self, data: &[u8]) -> Result<SocketAddr, String> {
         if data.len() < TURN_HEADER_SIZE {
             return Err("Response too short".to_string());
@@ -118,9 +146,11 @@ impl TurnClient {
             let attr_len = u16::from_be_bytes([data[offset + 2], data[offset + 3]]) as usize;
             offset += 4;
 
+            // 解析XOR中继地址属性
             if attr_type == XOR_RELAYED_ADDRESS && attr_len >= 8 {
                 let family = data[offset];
                 let xport = u16::from_be_bytes([data[offset + 2], data[offset + 3]]);
+                // 与魔术cookie高16位异或
                 let xored_port = xport ^ ((MAGIC_COOKIE >> 16) as u16);
 
                 let mut xaddr = [0u8; 4];
@@ -141,6 +171,7 @@ impl TurnClient {
             }
 
             offset += attr_len as usize;
+            // 4字节对齐
             if attr_len % 4 != 0 {
                 offset += 4 - (attr_len % 4);
             }
@@ -149,6 +180,11 @@ impl TurnClient {
         Err("XOR_RELAYED_ADDRESS not found".to_string())
     }
 
+    /// 创建权限
+    /// 允许特定IP地址通过中继发送数据
+    /// 
+    /// # 参数
+    /// * `peer_ip` - 允许的对等节点IP
     pub fn create_permission(&self, peer_ip: &str) -> Result<(), String> {
         let peer_addr: SocketAddr = format!("{}:0", peer_ip)
             .parse()
@@ -162,6 +198,7 @@ impl TurnClient {
         request[4..8].copy_from_slice(&MAGIC_COOKIE.to_be_bytes());
         request[8..20].copy_from_slice(&transaction_id);
 
+        // XOR对等地址属性
         request[TURN_HEADER_SIZE..TURN_HEADER_SIZE + 4].copy_from_slice(&XOR_PEER_ADDRESS_ATTRIBUTE);
         request[TURN_HEADER_SIZE + 4..TURN_HEADER_SIZE + 8].copy_from_slice(&8u16.to_be_bytes());
         request[TURN_HEADER_SIZE + 8] = 0x01;
@@ -180,6 +217,12 @@ impl TurnClient {
         Ok(())
     }
 
+    /// 绑定通道
+    /// 将通道ID与对等地址关联
+    /// 
+    /// # 参数
+    /// * `peer_addr` - 对等节点地址
+    /// * `channel_id` - 通道ID
     pub fn channel_bind(&self, peer_addr: SocketAddr, channel_id: u16) -> Result<(), String> {
         let mut request = vec![0u8; TURN_HEADER_SIZE + 16];
         request[0..2].copy_from_slice(&CHANNEL_BIND_REQUEST.to_be_bytes());
@@ -207,28 +250,37 @@ impl TurnClient {
         Ok(())
     }
 
+    /// 通过中继发送数据
     pub fn send_to_relay(&self, data: &[u8], peer_addr: SocketAddr) -> Result<usize, String> {
         self.socket
             .send_to(data, self.server_addr)
             .map_err(|e| format!("Failed to send to relay: {}", e))
     }
 
+    /// 从通过中继接收数据
     pub fn recv_from_relay(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr), String> {
         self.socket
             .recv_from(buf)
             .map_err(|e| format!("Failed to recv from relay: {}", e))
     }
 
+    /// 获取分配的中继地址
     pub fn relayed_address(&self) -> Option<SocketAddr> {
         self.relayed_addr
     }
 }
 
+/// TURN协议魔术cookie
 const MAGIC_COOKIE: u32 = 0x2112A442;
+/// XOR中继地址属性类型
 const XOR_RELAYED_ADDRESS: u16 = 0x0016;
+/// XOR对等地址属性类型
 const XOR_PEER_ADDRESS_ATTRIBUTE: u16 = 0x0020;
+/// 软件属性类型
 const SOFTWARE_ATTRIBUTE: u16 = 0x8022;
 
+/// 解析TURN服务器URL
+/// 支持 "turn:host:port"、"turn://host:port" 或 "host:port" 格式
 fn parse_turn_url(url: &str) -> Option<SocketAddr> {
     let url = url.strip_prefix("turn:")?;
     let url = url.strip_prefix("turn://")?;
@@ -249,6 +301,7 @@ fn parse_turn_url(url: &str) -> Option<SocketAddr> {
     }
 }
 
+/// 生成12字节的事务ID
 fn generate_transaction_id() -> [u8; 12] {
     use std::time::{SystemTime, UNIX_EPOCH};
     let now = SystemTime::now()
@@ -266,6 +319,7 @@ fn generate_transaction_id() -> [u8; 12] {
     tid
 }
 
+/// 解析TURN消息头部
 fn parse_header(data: &[u8]) -> (u16, u16, [u8; 12]) {
     let msg_type = u16::from_be_bytes([data[0], data[1]]);
     let msg_length = u16::from_be_bytes([data[2], data[3]]);
@@ -274,6 +328,7 @@ fn parse_header(data: &[u8]) -> (u16, u16, [u8; 12]) {
     (msg_type, msg_length, transaction_id)
 }
 
+/// 创建TURN客户端的便捷函数
 pub fn create_turn_client(server: &TurnServer) -> Result<TurnClient, String> {
     TurnClient::new(0, server)
 }

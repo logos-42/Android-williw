@@ -13,29 +13,57 @@ use super::signaling::{SignalingClient, SignalingServer};
 use super::stun_client::StunClient;
 use super::turn_client::TurnClient;
 
+/// 隧道管理器
+/// 负责P2P连接的建立、管理和维护
 pub struct TunnelManager {
+    /// 本节点ID
     peer_id: String,
+    /// 连接码
     connection_code: String,
+    /// P2P隧道模式
     mode: P2pTunnelMode,
+    /// STUN服务器列表
     stun_servers: Vec<StunServer>,
+    /// TURN服务器列表
     turn_servers: Vec<TurnServer>,
+    /// NAT发现结果
     nat_info: Option<NatDiscoveryResult>,
+    /// 信令客户端
     signaling_client: Option<SignalingClient>,
+    /// 活跃隧道映射
     active_tunnels: Arc<RwLock<HashMap<String, Tunnel>>>,
+    /// 是否在线
     is_online: Arc<RwLock<bool>>,
 }
 
+/// 隧道结构体
+/// 代表一个活跃的P2P隧道连接
 struct Tunnel {
+    /// 隧道ID
     tunnel_id: String,
+    /// 对等节点ID
     peer_id: String,
+    /// 本地端点
     local_endpoint: SocketAddr,
+    /// 远端端点
     remote_endpoint: SocketAddr,
+    /// 是否使用中继
     relay_used: bool,
+    /// 建立时间
     established_at: std::time::Instant,
+    /// 最后活动时间
     last_activity: std::time::Instant,
 }
 
 impl TunnelManager {
+    /// 创建隧道管理器
+    /// 
+    /// # 参数
+    /// * `peer_id` - 本节点ID
+    /// * `connection_code` - 连接码
+    /// * `mode` - P2P隧道模式
+    /// * `stun_servers` - STUN服务器列表
+    /// * `turn_servers` - TURN服务器列表
     pub fn new(
         peer_id: String,
         connection_code: String,
@@ -56,14 +84,20 @@ impl TunnelManager {
         }
     }
 
+    /// 使节点上线
+    /// 执行NAT发现，连接信令服务器，注册节点信息
     pub async fn go_online(&mut self, relay_url: &str) -> Result<String, String> {
+        // 执行NAT发现
         self.nat_info = Some(self.discover_nat().await?);
 
+        // 连接信令服务器
         let mut signaling = SignalingClient::new(relay_url, self.peer_id.clone());
         signaling.connect().await?;
 
+        // 注册连接码
         signaling.register_connection_code(&self.connection_code).await?;
 
+        // 发送NAT信息
         if let Some(ref nat_info) = self.nat_info {
             signaling.send_nat_info(nat_info).await?;
         }
@@ -74,6 +108,8 @@ impl TunnelManager {
         Ok(self.connection_code.clone())
     }
 
+    /// 使节点下线
+    /// 断开信令连接，清空所有隧道
     pub async fn go_offline(&mut self) -> Result<(), String> {
         if let Some(ref mut signaling) = self.signaling_client {
             signaling.disconnect().await?;
@@ -87,10 +123,12 @@ impl TunnelManager {
         Ok(())
     }
 
+    /// 检查是否在线
     pub async fn is_online(&self) -> bool {
         *self.is_online.read().await
     }
 
+    /// 执行NAT发现
     async fn discover_nat(&self) -> Result<NatDiscoveryResult, String> {
         if let Some(ref stun_server) = self.stun_servers.first() {
             let client = StunClient::new(0)?;
@@ -100,36 +138,38 @@ impl TunnelManager {
         }
     }
 
+    /// 连接到对等节点
+    /// 根据NAT类型选择最佳连接策略
     pub async fn connect_to_peer(&mut self, host_peer_id: &str) -> Result<TunnelConnection, String> {
         if !self.is_online().await {
             return Err("P2P service is offline".to_string());
         }
 
-        let signaling = self.signaling_client.as_mut()
-            .ok_or("Signaling client not initialized")?;
-
         let nat_info = self.nat_info.as_ref()
             .ok_or("NAT info not discovered")?;
 
+        // 根据NAT类型选择连接策略
         match nat_info.nat_type {
             NatType::Symmetric => {
+                // 对称型NAT只能使用中继
                 self.connect_via_relay(host_peer_id).await
             }
             NatType::PortRestricted | NatType::Restricted => {
+                // 端口受限/受限NAT尝试NAT穿透，失败则回退到中继
                 self.try_nat_traversal(host_peer_id).await
             }
-            NatType::FullCone => {
-                self.try_direct_connection(host_peer_id).await
-            }
-            NatType::OpenInternet => {
+            NatType::FullCone | NatType::OpenInternet => {
+                // 全锥型NAT或开放网络可以直接连接
                 self.try_direct_connection(host_peer_id).await
             }
             NatType::Unknown => {
+                // 未知类型默认使用中继
                 self.connect_via_relay(host_peer_id).await
             }
         }
     }
 
+    /// 尝试直接连接
     async fn try_direct_connection(&mut self, host_peer_id: &str) -> Result<TunnelConnection, String> {
         let signaling = self.signaling_client.as_mut()
             .ok_or("Signaling client not initialized")?;
@@ -157,12 +197,14 @@ impl TunnelManager {
                 })
             }
             Err(e) => {
+                // 直接连接失败，回退到中继
                 tracing::warn!("Direct connection failed, falling back to relay: {}", e);
                 self.connect_via_relay(host_peer_id).await
             }
         }
     }
 
+    /// 尝试NAT穿透连接
     async fn try_nat_traversal(&mut self, host_peer_id: &str) -> Result<TunnelConnection, String> {
         let signaling = self.signaling_client.as_mut()
             .ok_or("Signaling client not initialized")?;
@@ -190,12 +232,14 @@ impl TunnelManager {
                 })
             }
             Err(e) => {
+                // NAT穿透失败，回退到中继
                 tracing::warn!("NAT traversal failed, falling back to relay: {}", e);
                 self.connect_via_relay(host_peer_id).await
             }
         }
     }
 
+    /// 通过中继服务器连接
     async fn connect_via_relay(&mut self, host_peer_id: &str) -> Result<TunnelConnection, String> {
         if let Some(ref turn_server) = self.turn_servers.first() {
             let mut turn_client = TurnClient::new(0, turn_server)?;
@@ -204,6 +248,7 @@ impl TunnelManager {
             let signaling = self.signaling_client.as_mut()
                 .ok_or("Signaling client not initialized")?;
 
+            // 创建权限
             turn_client.create_permission("0.0.0.0")?;
 
             let tunnel_id = Uuid::new_v4().to_string();
@@ -232,21 +277,26 @@ impl TunnelManager {
         }
     }
 
+    /// 断开指定隧道
     pub async fn disconnect_tunnel(&mut self, tunnel_id: &str) -> Result<(), String> {
         let mut tunnels = self.active_tunnels.write().await;
         tunnels.remove(tunnel_id);
         Ok(())
     }
 
+    /// 获取所有活跃隧道ID列表
     pub async fn get_active_tunnels(&self) -> Vec<String> {
         let tunnels = self.active_tunnels.read().await;
         tunnels.keys().cloned().collect()
     }
 
+    /// 获取NAT发现结果
     pub async fn get_nat_info(&self) -> Option<&NatDiscoveryResult> {
         self.nat_info.as_ref()
     }
 
+    /// 发送心跳保活
+    /// 更新所有隧道活动时间
     pub async fn keepalive(&mut self) -> Result<(), String> {
         if let Some(ref mut signaling) = self.signaling_client {
             signaling.send_keepalive().await?;
@@ -260,6 +310,8 @@ impl TunnelManager {
         Ok(())
     }
 
+    /// 清理超时隧道
+    /// 移除超过指定超时时间的隧道
     pub async fn cleanup_stale_tunnels(&mut self, timeout: Duration) {
         let mut tunnels = self.active_tunnels.write().await;
         tunnels.retain(|_, tunnel| {
@@ -268,22 +320,34 @@ impl TunnelManager {
     }
 }
 
+/// 隧道连接信息
 pub struct TunnelConnection {
+    /// 隧道ID
     pub tunnel_id: String,
+    /// 远端端点地址
     pub endpoint: String,
+    /// 是否使用中继
     pub relay_used: bool,
+    /// 连接质量
     pub quality: ConnectionQuality,
 }
 
+/// 隧道端点
 pub struct TunnelEndpoint {
+    /// 隧道ID
     pub tunnel_id: String,
+    /// 对等节点ID
     pub peer_id: String,
+    /// 本地套接字地址
     pub local_socket: SocketAddr,
+    /// 远端套接字地址
     pub remote_socket: SocketAddr,
+    /// 是否使用中继
     pub relay_used: bool,
 }
 
 impl TunnelEndpoint {
+    /// 创建新的隧道端点
     pub fn new(tunnel_id: String, peer_id: String) -> Self {
         Self {
             tunnel_id,
@@ -294,12 +358,14 @@ impl TunnelEndpoint {
         }
     }
 
+    /// 设置本地和远端套接字
     pub fn with_sockets(mut self, local: SocketAddr, remote: SocketAddr) -> Self {
         self.local_socket = local;
         self.remote_socket = remote;
         self
     }
 
+    /// 设置是否使用中继
     pub fn with_relay(mut self, used: bool) -> Self {
         self.relay_used = used;
         self

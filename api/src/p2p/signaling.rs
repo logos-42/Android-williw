@@ -8,16 +8,29 @@ use williw_shared::{
 };
 use futures_util::{SinkExt, StreamExt};
 
+/// WebSocket信令客户端
+/// 用于P2P连接建立时的节点发现和协商
 pub struct SignalingClient {
+    /// WebSocket服务器URL
     ws_url: String,
+    /// 本节点ID
     peer_id: String,
+    /// 连接码
     connection_code: Option<String>,
+    /// 连接状态
     connected: Arc<RwLock<bool>>,
+    /// 消息发送通道
     sender: Arc<RwLock<Option<mpsc::Sender<SignalingMessage>>>>,
+    /// 消息接收通道
     receiver: Arc<RwLock<Option<mpsc::Receiver<SignalingMessage>>>>,
 }
 
 impl SignalingClient {
+    /// 创建新的信令客户端
+    /// 
+    /// # 参数
+    /// * `relay_url` - 中继服务器URL
+    /// * `peer_id` - 本节点ID
     pub fn new(relay_url: &str, peer_id: String) -> Self {
         Self {
             ws_url: format!("{}/api/p2p/ws", relay_url.trim_end_matches('/')),
@@ -29,6 +42,8 @@ impl SignalingClient {
         }
     }
 
+    /// 连接到信令服务器
+    /// 建立WebSocket连接并启动消息处理循环
     pub async fn connect(&mut self) -> Result<(), String> {
         let url = Url::parse(&self.ws_url)
             .map_err(|e| format!("Invalid WebSocket URL: {}", e))?;
@@ -39,10 +54,12 @@ impl SignalingClient {
 
         let (write, read) = ws_stream.split();
 
+        // 创建双向消息通道
         let (tx, rx) = mpsc::channel::<SignalingMessage>(100);
         let (out_tx, mut out_rx) = mpsc::channel::<SignalingMessage>(100);
 
         let peer_id = self.peer_id.clone();
+        // 启动异步消息处理任务
         tokio::spawn(async move {
             let mut read = read;
             let mut out_rx = out_rx;
@@ -50,6 +67,7 @@ impl SignalingClient {
 
             loop {
                 tokio::select! {
+                    // 处理接收到的WebSocket消息
                     msg = read.next() => {
                         match msg {
                             Some(Ok(Message::Text(text))) => {
@@ -63,6 +81,7 @@ impl SignalingClient {
                             _ => {}
                         }
                     }
+                    // 处理待发送的消息
                     msg = out_rx.recv() => {
                         if let Some(sig_msg) = msg {
                             let json = serde_json::to_string(&sig_msg).unwrap_or_default();
@@ -77,11 +96,13 @@ impl SignalingClient {
         *self.receiver.write().await = Some(rx);
         *self.connected.write().await = true;
 
+        // 发送注册消息
         self.send_register().await?;
 
         Ok(())
     }
 
+    /// 断开与信令服务器的连接
     pub async fn disconnect(&mut self) -> Result<(), String> {
         *self.connected.write().await = false;
         *self.sender.write().await = None;
@@ -89,11 +110,13 @@ impl SignalingClient {
         Ok(())
     }
 
+    /// 检查是否已连接
     pub async fn is_connected(&self) -> bool {
         *self.connected.read().await
     }
 
-    pub async fn send_register(&mut self) -> Result<(), String> {
+    /// 发送注册消息到信令服务器
+    async fn send_register(&mut self) -> Result<(), String> {
         let msg = SignalingMessage {
             msg_type: SignalingMessageType::Register,
             from_peer_id: self.peer_id.clone(),
@@ -105,6 +128,10 @@ impl SignalingClient {
         self.send(msg).await
     }
 
+    /// 使用连接码注册到信令服务器
+    /// 
+    /// # 参数
+    /// * `code` - 连接码
     pub async fn register_connection_code(&mut self, code: &str) -> Result<(), String> {
         self.connection_code = Some(code.to_string());
 
@@ -123,6 +150,13 @@ impl SignalingClient {
         self.send(msg).await
     }
 
+    /// 根据连接码查找对等节点
+    /// 
+    /// # 参数
+    /// * `connection_code` - 目标节点的连接码
+    /// 
+    /// # 返回
+    /// 找到返回节点端点信息
     pub async fn lookup_peer(&mut self, connection_code: &str) -> Result<PeerEndpoint, String> {
         let payload = serde_json::json!({
             "connection_code": connection_code
@@ -153,6 +187,10 @@ impl SignalingClient {
         Err("No response from lookup".to_string())
     }
 
+    /// 发送NAT穿透信息到信令服务器
+    /// 
+    /// # 参数
+    /// * `nat_info` - NAT发现结果
     pub async fn send_nat_info(&mut self, nat_info: &NatDiscoveryResult) -> Result<(), String> {
         let payload = serde_json::json!({
             "nat_type": nat_info.nat_type.to_string(),
@@ -173,6 +211,13 @@ impl SignalingClient {
         self.send(msg).await
     }
 
+    /// 向目标节点发起连接请求
+    /// 
+    /// # 参数
+    /// * `host_peer_id` - 目标节点ID
+    /// 
+    /// # 返回
+    /// 连接成功返回隧道建立信息
     pub async fn request_connection(&mut self, host_peer_id: &str) -> Result<TunnelEstablished, String> {
         let payload = serde_json::json!({
             "host_peer_id": host_peer_id
@@ -209,6 +254,10 @@ impl SignalingClient {
         Err("Connection request timed out".to_string())
     }
 
+    /// 接受来自客户端的连接请求
+    /// 
+    /// # 参数
+    /// * `client_peer_id` - 客户端节点ID
     pub async fn accept_connection(&mut self, client_peer_id: &str) -> Result<TunnelEstablished, String> {
         let payload = serde_json::json!({
             "client_peer_id": client_peer_id,
@@ -227,6 +276,7 @@ impl SignalingClient {
         self.send(msg).await
     }
 
+    /// 发送心跳保活消息
     pub async fn send_keepalive(&mut self) -> Result<(), String> {
         let msg = SignalingMessage {
             msg_type: SignalingMessageType::KeepAlive,
@@ -239,6 +289,7 @@ impl SignalingClient {
         self.send(msg).await
     }
 
+    /// 发送消息到信令服务器
     async fn send(&mut self, msg: SignalingMessage) -> Result<(), String> {
         let sender = self.sender.read().await;
         let sender = sender
@@ -252,16 +303,29 @@ impl SignalingClient {
     }
 }
 
+/// 信令服务器（用于模拟或本地测试）
+/// 维护节点信息和NAT类型
 pub struct SignalingServer {
+    /// 节点ID
     pub peer_id: String,
+    /// 连接码
     pub connection_code: String,
+    /// NAT类型
     pub nat_type: NatType,
+    /// 公网IP地址
     pub external_ip: Option<String>,
+    /// 公网端口
     pub external_port: Option<u16>,
+    /// 是否启用中继
     pub relay_enabled: bool,
 }
 
 impl SignalingServer {
+    /// 创建新的信令服务器实例
+    /// 
+    /// # 参数
+    /// * `peer_id` - 节点ID
+    /// * `connection_code` - 连接码
     pub fn new(peer_id: String, connection_code: String) -> Self {
         Self {
             peer_id,
@@ -273,16 +337,20 @@ impl SignalingServer {
         }
     }
 
+    /// 设置NAT信息
+    /// 根据NAT类型决定是否启用中继
     pub fn with_nat_info(mut self, nat_info: NatDiscoveryResult) -> Self {
         self.nat_type = nat_info.nat_type;
         self.external_ip = nat_info.external_ip;
         self.external_port = nat_info.external_port;
+        // 对称型NAT或端口受限NAT需要中继
         self.relay_enabled = self.nat_type == NatType::Symmetric
             || self.nat_type == NatType::PortRestricted
             || self.nat_type == NatType::Restricted;
         self
     }
 
+    /// 转换为对等节点端点信息
     pub fn to_peer_endpoint(&self) -> PeerEndpoint {
         PeerEndpoint::new(self.peer_id.clone())
             .with_nat_type(self.nat_type.clone())

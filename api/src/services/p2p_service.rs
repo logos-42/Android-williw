@@ -6,7 +6,7 @@ use uuid::Uuid;
 use chrono::Utc;
 use williw_shared::*;
 
-use crate::p2p::{TunnelManager, TunnelConnection};
+use crate::p2p::{TunnelManager, TunnelConnection, StunServer, TurnServer};
 
 /// P2P服务结构体，管理点对点连接和隧道
 pub struct P2pService {
@@ -104,7 +104,7 @@ impl P2pService {
         let stun_servers = config
             .stun_servers
             .iter()
-            .map(|s| crate::p2p::StunServer {
+            .map(|s| StunServer {
                 url: s.clone(),
                 name: "STUN Server".to_string(),
             })
@@ -114,7 +114,7 @@ impl P2pService {
         let turn_servers = config
             .relay_servers
             .iter()
-            .map(|s| crate::p2p::TurnServer::new(s.url.clone(), s.region.clone()))
+            .map(|s| TurnServer::new(s.url.clone(), s.region.clone()))
             .collect();
 
         // 获取首选中继服务器URL，默认使用williw官方中继
@@ -147,7 +147,7 @@ impl P2pService {
         // 获取NAT穿透信息，构建公网端点
         let nat_info = self.tunnel_manager.read().await
             .as_ref()
-            .and_then(|m| m.get_nat_info().await);
+            .and_then(|m| m.get_nat_info());
 
         // 格式化公网端点地址
         let public_endpoint = nat_info
@@ -196,7 +196,7 @@ impl P2pService {
         // 获取NAT穿透信息
         let nat_info = self.tunnel_manager.read().await
             .as_ref()
-            .and_then(|m| m.get_nat_info().await);
+            .and_then(|m| m.get_nat_info());
 
         P2pStatus {
             is_online: self.is_online.load(Ordering::SeqCst),
@@ -223,7 +223,7 @@ impl P2pService {
         // 获取NAT穿透信息，构建公网端点
         let nat_info = self.tunnel_manager.read().await
             .as_ref()
-            .and_then(|m| m.get_nat_info().await);
+            .and_then(|m| m.get_nat_info());
 
         let public_endpoint = nat_info
             .map(|n| format!("{}:{}", n.external_ip.clone().unwrap_or_default(), n.external_port.unwrap_or(0)))
