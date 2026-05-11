@@ -307,6 +307,101 @@ impl Default for LocalApiConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct P2pConfig {
+    pub enabled: bool,
+    pub tunnel_mode: P2pTunnelMode,
+    pub stun_servers: Vec<String>,
+    pub relay_servers: Vec<RelayServerConfig>,
+    pub connection_code: Option<String>,
+    pub peer_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum P2pTunnelMode {
+    StunOnly,
+    RelayFallback,
+    RelayPreferred,
+}
+
+impl Default for P2pConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            tunnel_mode: P2pTunnelMode::RelayFallback,
+            stun_servers: vec![
+                "stun:stun.l.google.com:19302".to_string(),
+                "stun:stun1.l.google.com:19302".to_string(),
+            ],
+            relay_servers: vec![
+                RelayServerConfig {
+                    url: "wss://relay.williw.ai".to_string(),
+                    region: "auto".to_string(),
+                },
+            ],
+            connection_code: None,
+            peer_id: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelayServerConfig {
+    pub url: String,
+    pub region: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct P2pConnectionInfo {
+    pub peer_id: String,
+    pub connection_code: String,
+    pub public_endpoint: Option<String>,
+    pub is_connected: bool,
+    pub connected_peers: Vec<PeerInfo>,
+    pub connection_quality: ConnectionQuality,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PeerInfo {
+    pub peer_id: String,
+    pub device_name: String,
+    pub endpoint: String,
+    pub connected_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum ConnectionQuality {
+    Excellent,
+    Good,
+    Fair,
+    Poor,
+    Disconnected,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct P2pTunnelRequest {
+    pub host_peer_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct P2pTunnelResponse {
+    pub tunnel_endpoint: String,
+    pub auth_token: String,
+    pub expires_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct P2pStatus {
+    pub is_online: bool,
+    pub peer_id: String,
+    pub connection_code: String,
+    pub active_tunnels: u32,
+    pub total_bandwidth_mbps: f64,
+    pub relay_usage_percent: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelManifest {
     pub models: Vec<ModelManifestEntry>,
 }

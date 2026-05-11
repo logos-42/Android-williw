@@ -228,6 +228,57 @@ impl ApiClient {
         let response: ApiResponse<InferenceResponse> = self.post("/local/inference", &request).await?;
         response.data.ok_or(response.error.unwrap_or_else(|| "Unknown error".to_string()))
     }
+
+    pub async fn get_p2p_status(&self) -> Result<P2pStatus, String> {
+        let response: ApiResponse<P2pStatus> = self.get("/p2p/status").await?;
+        response.data.ok_or(response.error.unwrap_or_else(|| "Unknown error".to_string()))
+    }
+
+    pub async fn get_p2p_config(&self) -> Result<P2pConfig, String> {
+        let response: ApiResponse<P2pConfig> = self.get("/p2p/config").await?;
+        response.data.ok_or(response.error.unwrap_or_else(|| "Unknown error".to_string()))
+    }
+
+    pub async fn update_p2p_config(&self, config: P2pConfig) -> Result<P2pConfig, String> {
+        let response: ApiResponse<P2pConfig> = self.post("/p2p/config", &config).await?;
+        response.data.ok_or(response.error.unwrap_or_else(|| "Unknown error".to_string()))
+    }
+
+    pub async fn p2p_go_online(&self) -> Result<P2pConnectionInfo, String> {
+        let response: ApiResponse<P2pConnectionInfo> = self.post("/p2p/online", &()).await?;
+        response.data.ok_or(response.error.unwrap_or_else(|| "Unknown error".to_string()))
+    }
+
+    pub async fn p2p_go_offline(&self) -> Result<String, String> {
+        let response: ApiResponse<String> = self.post("/p2p/offline", &()).await?;
+        response.data.ok_or(response.error.unwrap_or_else(|| "Unknown error".to_string()))
+    }
+
+    pub async fn get_p2p_connection_info(&self) -> Result<P2pConnectionInfo, String> {
+        let response: ApiResponse<P2pConnectionInfo> = self.get("/p2p/connection-info").await?;
+        response.data.ok_or(response.error.unwrap_or_else(|| "Unknown error".to_string()))
+    }
+
+    pub async fn connect_to_peer(&self, peer_id: String) -> Result<P2pTunnelResponse, String> {
+        let response: ApiResponse<P2pTunnelResponse> = self.post(&format!("/p2p/connect/{}", peer_id), &()).await?;
+        response.data.ok_or(response.error.unwrap_or_else(|| "Unknown error".to_string()))
+    }
+
+    pub async fn share_p2p_connection(&self, host_peer_id: String) -> Result<P2pTunnelResponse, String> {
+        let request = P2pTunnelRequest { host_peer_id };
+        let response: ApiResponse<P2pTunnelResponse> = self.post("/p2p/share", &request).await?;
+        response.data.ok_or(response.error.unwrap_or_else(|| "Unknown error".to_string()))
+    }
+
+    pub async fn disconnect_p2p_tunnel(&self, tunnel_id: String) -> Result<(), String> {
+        let _: ApiResponse<()> = self.delete(&format!("/p2p/tunnel/{}", tunnel_id)).await?;
+        Ok(())
+    }
+
+    pub async fn test_p2p_connection(&self) -> Result<ConnectionQuality, String> {
+        let response: ApiResponse<ConnectionQuality> = self.get("/p2p/test").await?;
+        response.data.ok_or(response.error.unwrap_or_else(|| "Unknown error".to_string()))
+    }
 }
 
 #[derive(Debug, Serialize)]
