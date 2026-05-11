@@ -1,0 +1,26 @@
+[package]
+name = "williw-api"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+williw-shared = { path = "../shared" }
+
+axum = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+chrono = { workspace = true }
+jsonwebtoken = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+utoipa = { workspace = true }
+
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+[dev-dependencies]
+tokio-test = "0.4"
