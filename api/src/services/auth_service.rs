@@ -3,6 +3,7 @@ use crate::auth::jwt;
 use crate::models::{LoginRequest, LoginResponse, ProfileResponse};
 use williw_shared::*;
 use std::sync::Arc;
+use uuid::Uuid;
 
 /// 认证服务
 /// 处理钱包登录和用户资料获取

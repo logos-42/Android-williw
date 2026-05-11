@@ -1,4 +1,5 @@
 use williw_shared::*;
+use uuid::Uuid;
 
 /// 创建计算请求的请求结构
 #[derive(serde::Deserialize)]

@@ -18,7 +18,7 @@ pub struct P2pService {
     /// 本节点唯一标识符
     peer_id: String,
     /// 连接码，用于其他节点发现和连接
-    connection_code: String,
+    connection_code: RwLock<String>,
     /// 当前活跃的隧道数量
     active_tunnels: AtomicU32,
     /// 已连接的节点信息映射表
@@ -40,7 +40,7 @@ impl P2pService {
             tunnel_manager: Arc::new(RwLock::new(None)),
             is_online: AtomicBool::new(false),
             peer_id,
-            connection_code,
+            connection_code: RwLock::new(connection_code),
             active_tunnels: AtomicU32::new(0),
             connected_peers: RwLock::new(HashMap::new()),
             config: RwLock::new(P2pConfig::default()),
@@ -148,7 +148,7 @@ impl P2pService {
         // 获取NAT穿透信息，构建公网端点
         let nat_info = self.tunnel_manager.read().await
             .as_ref()
-            .and_then(|m| m.get_nat_info());
+            .and_then(|m| futures::executor::block_on(m.get_nat_info()));
 
         // 格式化公网端点地址
         let public_endpoint = nat_info

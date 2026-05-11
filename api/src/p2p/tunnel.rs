@@ -291,7 +291,7 @@ impl TunnelManager {
     }
 
     /// 获取NAT发现结果
-    pub async fn get_nat_info(&self) -> Option<&NatDiscoveryResult> {
+    pub fn get_nat_info(&self) -> Option<&NatDiscoveryResult> {
         self.nat_info.as_ref()
     }
 

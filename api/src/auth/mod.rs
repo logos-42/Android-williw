@@ -3,6 +3,3 @@
 
 pub mod jwt;
 pub mod wallet;
-
-// 重新导出AuthLayer以方便外部使用
-pub use jwt::AuthLayer;

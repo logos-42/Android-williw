@@ -62,3 +62,7 @@ pub fn verify_token(token: &str) -> Result<Claims, jsonwebtoken::errors::Error> 
     )?;
     Ok(token_data.claims)
 }
+
+pub fn extract_user_id(token: &str) -> Option<Uuid> {
+    verify_token(token).ok().map(|claims| claims.sub)
+}
