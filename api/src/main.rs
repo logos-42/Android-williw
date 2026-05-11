@@ -5,6 +5,8 @@ mod payments;
 mod routes;
 mod services;
 
+pub mod p2p;
+
 use axum::{
     Router,
     middleware,

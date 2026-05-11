@@ -401,6 +401,162 @@ pub struct P2pStatus {
     pub relay_usage_percent: Option<f64>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum NatType {
+    OpenInternet,
+    FullCone,
+    Restricted,
+    PortRestricted,
+    Symmetric,
+    Unknown,
+}
+
+impl std::fmt::Display for NatType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NatType::OpenInternet => write!(f, "open_internet"),
+            NatType::FullCone => write!(f, "full_cone"),
+            NatType::Restricted => write!(f, "restricted"),
+            NatType::PortRestricted => write!(f, "port_restricted"),
+            NatType::Symmetric => write!(f, "symmetric"),
+            NatType::Unknown => write!(f, "unknown"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PeerEndpoint {
+    pub peer_id: String,
+    pub public_ip: Option<String>,
+    pub public_port: Option<u16>,
+    pub nat_type: NatType,
+    pub relay_enabled: bool,
+    pub local_ip: Option<String>,
+    pub local_port: Option<u16>,
+}
+
+impl PeerEndpoint {
+    pub fn new(peer_id: String) -> Self {
+        Self {
+            peer_id,
+            public_ip: None,
+            public_port: None,
+            nat_type: NatType::Unknown,
+            relay_enabled: false,
+            local_ip: None,
+            local_port: None,
+        }
+    }
+
+    pub fn with_public(mut self, ip: String, port: u16) -> Self {
+        self.public_ip = Some(ip);
+        self.public_port = Some(port);
+        self
+    }
+
+    pub fn with_local(mut self, ip: String, port: u16) -> Self {
+        self.local_ip = Some(ip);
+        self.local_port = Some(port);
+        self
+    }
+
+    pub fn with_nat_type(mut self, nat_type: NatType) -> Self {
+        self.nat_type = nat_type;
+        self
+    }
+
+    pub fn with_relay(mut self, enabled: bool) -> Self {
+        self.relay_enabled = enabled;
+        self
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StunServer {
+    pub url: String,
+    pub name: String,
+}
+
+impl Default for StunServer {
+    fn default() -> Self {
+        Self {
+            url: "stun:stun.l.google.com:19302".to_string(),
+            name: "Google STUN".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TurnServer {
+    pub url: String,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub region: String,
+}
+
+impl TurnServer {
+    pub fn new(url: String, region: String) -> Self {
+        Self {
+            url,
+            username: None,
+            password: None,
+            region,
+        }
+    }
+
+    pub fn with_credentials(mut self, username: String, password: String) -> Self {
+        self.username = Some(username);
+        self.password = Some(password);
+        self
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NatDiscoveryResult {
+    pub external_ip: Option<String>,
+    pub external_port: Option<u16>,
+    pub nat_type: NatType,
+    pub local_ip: String,
+    pub local_port: u16,
+    pub stun_server_used: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SignalingMessage {
+    pub msg_type: SignalingMessageType,
+    pub from_peer_id: String,
+    pub to_peer_id: Option<String>,
+    pub payload: Option<serde_json::Value>,
+    pub timestamp: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum SignalingMessageType {
+    Register,
+    RegisterAck,
+    Lookup,
+    LookupResult,
+    NatInfo,
+    NatInfoAck,
+    ConnectRequest,
+    ConnectAccept,
+    ConnectReject,
+    KeepAlive,
+    Disconnect,
+    Error,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TunnelEstablished {
+    pub tunnel_id: String,
+    pub local_endpoint: String,
+    pub remote_endpoint: String,
+    pub relay_used: bool,
+    pub connection_quality: ConnectionQuality,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelManifest {
     pub models: Vec<ModelManifestEntry>,
