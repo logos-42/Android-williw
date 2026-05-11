@@ -1,15 +1,23 @@
+/// 本地模型页面组件
 use leptos::*;
 use uuid::Uuid;
 use crate::api::ApiClient;
 use williw_shared::{LocalModel, LocalModelStatus};
 
+/// 本地模型页面组件
+/// 展示设备上的本地AI模型和下载管理
 #[component]
 pub fn LocalModels() -> impl IntoView {
+    // 本地模型列表
     let (models, set_models) = create_signal(Vec::<LocalModel>::new());
+    // 加载状态
     let (loading, set_loading) = create_signal(true);
+    // 设备信息
     let (device_info, set_device_info) = create_signal(Option::<williw_shared::DeviceInfo>::None);
+    // 正在下载的模型ID
     let (downloading, set_downloading) = create_signal(Option::<Uuid>::None);
 
+    /// 加载数据
     let load_data = move || {
         spawn(async move {
             set_loading(true);
@@ -33,6 +41,7 @@ pub fn LocalModels() -> impl IntoView {
         load_data();
     });
 
+    /// 处理下载模型
     let handle_download = move |model_id: Uuid| {
         set_downloading(Some(model_id));
         spawn(async move {
@@ -47,6 +56,7 @@ pub fn LocalModels() -> impl IntoView {
         });
     };
 
+    /// 处理删除模型
     let handle_delete = move |model_id: Uuid| {
         spawn(async move {
             let client = ApiClient::new();
@@ -57,6 +67,7 @@ pub fn LocalModels() -> impl IntoView {
         });
     };
 
+    /// 处理设置默认模型
     let handle_set_default = move |model_id: Uuid| {
         spawn(async move {
             let client = ApiClient::new();
@@ -67,6 +78,7 @@ pub fn LocalModels() -> impl IntoView {
         });
     };
 
+    /// 获取状态徽章样式
     let status_badge = |status: &LocalModelStatus| -> String {
         match status {
             LocalModelStatus::NotDownloaded => "bg-gray-200 text-gray-700".to_string(),
@@ -78,6 +90,7 @@ pub fn LocalModels() -> impl IntoView {
         }
     };
 
+    /// 获取状态显示文本
     let status_text = |status: &LocalModelStatus| -> String {
         match status {
             LocalModelStatus::NotDownloaded => "Not Downloaded".to_string(),
@@ -103,6 +116,7 @@ pub fn LocalModels() -> impl IntoView {
             </nav>
 
             <main class="max-w-4xl mx-auto px-4 py-6">
+                // 设备信息栏
                 {move || {
                     if let Some(info) = device_info() {
                         view! {
@@ -235,11 +249,12 @@ pub fn LocalModels() -> impl IntoView {
                 }}
             </main>
 
+            // 底部导航栏
             <nav class="fixed bottom-0 left-0 right-0 bg-white border-t">
                 <div class="flex justify-around py-2">
                     <a href="/local-models" class="flex flex-col items-center p-2 text-blue-600">
                         <span class="text-2xl">📥</span>
-                        <span class="text-xs">Downloads</span>
+                        <span class="text-xs"> Downloads</span>
                     </a>
                     <a href="/api-server" class="flex flex-col items-center p-2 text-gray-600">
                         <span class="text-2xl">🔌</span>

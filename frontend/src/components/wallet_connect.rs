@@ -1,13 +1,27 @@
+/// 钱包连接组件
 use leptos::*;
 
+/// 钱包连接组件属性
+#[derive(Clone)]
+pub struct WalletConnectProps {
+    /// 连接成功回调
+    pub on_connect: Box<dyn Fn(String)>,
+}
+
+/// 钱包连接组件
+/// 提供钱包地址输入和连接功能
 #[component]
 pub fn WalletConnect(props: WalletConnectProps) -> impl IntoView {
+    // 钱包地址
     let (address, set_address) = create_signal(String::new());
+    // 连接中状态
     let (connecting, set_connecting) = create_signal(false);
 
+    /// 处理连接按钮点击
     let handle_connect = move || {
         let addr = address();
         if addr.is_empty() {
+            // 使用示例地址
             let sample_address = "0x742d35Cc6634C0532925a3b844Bc9e7595f1E2dB";
             set_address(sample_address.to_string());
         }
@@ -51,9 +65,4 @@ pub fn WalletConnect(props: WalletConnectProps) -> impl IntoView {
             </button>
         </div>
     }
-}
-
-#[derive(Clone)]
-pub struct WalletConnectProps {
-    pub on_connect: Box<dyn Fn(String)>,
 }

@@ -1,9 +1,13 @@
+/// API服务器页面组件
 use leptos::*;
 use crate::api::ApiClient;
 use williw_shared::{LocalApiConfig, P2pStatus, P2pConfig, P2pConnectionInfo};
 
+/// API服务器页面组件
+/// 管理本地API服务器和P2P连接
 #[component]
 pub fn ApiServer() -> impl IntoView {
+    // 配置和状态
     let (config, set_config) = create_signal(Option::<LocalApiConfig>::None);
     let (p2p_config, set_p2p_config) = create_signal(Option::<P2pConfig>::None);
     let (p2p_status, set_p2p_status) = create_signal(Option::<P2pStatus>::None);
@@ -16,6 +20,7 @@ pub fn ApiServer() -> impl IntoView {
     let (connect_peer_id, set_connect_peer_id) = create_signal(String::new());
     let (share_code, set_share_code) = create_signal(String::new());
 
+    /// 加载所有数据
     let load_data = move || {
         spawn(async move {
             set_loading(true);
@@ -55,6 +60,7 @@ pub fn ApiServer() -> impl IntoView {
         load_data();
     });
 
+    /// 切换本地服务器开关
     let handle_toggle_server = move || {
         spawn(async move {
             let client = ApiClient::new();
@@ -76,6 +82,7 @@ pub fn ApiServer() -> impl IntoView {
         });
     };
 
+    /// 切换P2P开关
     let handle_toggle_p2p = move || {
         spawn(async move {
             let client = ApiClient::new();
@@ -107,6 +114,7 @@ pub fn ApiServer() -> impl IntoView {
         });
     };
 
+    /// 连接到对等节点
     let handle_connect_peer = move || {
         let peer_id = connect_peer_id();
         if peer_id.is_empty() { return; }
@@ -125,6 +133,7 @@ pub fn ApiServer() -> impl IntoView {
         });
     };
 
+    /// 更新服务器配置
     let handle_update_config = move |new_config: LocalApiConfig| {
         spawn(async move {
             let client = ApiClient::new();
@@ -158,6 +167,7 @@ pub fn ApiServer() -> impl IntoView {
             <main class="max-w-2xl mx-auto px-4 py-6">
                 <h1 class="text-2xl font-bold mb-6">API Server & P2P</h1>
 
+                // 消息提示
                 {move || {
                     if let Some(msg) = message() {
                         view! {
@@ -170,6 +180,7 @@ pub fn ApiServer() -> impl IntoView {
                     }
                 }}
 
+                // 本地服务器卡片
                 <div class="bg-white rounded-lg shadow p-6 mb-6">
                     <h2 class="text-lg font-semibold mb-4">Local Server</h2>
 
@@ -205,6 +216,7 @@ pub fn ApiServer() -> impl IntoView {
                     }}
                 </div>
 
+                // P2P隧道卡片
                 <div class="bg-white rounded-lg shadow p-6 mb-6">
                     <h2 class="text-lg font-semibold mb-4">🌐 P2P Tunnel (Internet Access)</h2>
 
@@ -267,6 +279,7 @@ pub fn ApiServer() -> impl IntoView {
                     </div>
                 </div>
 
+                // P2P配置卡片
                 <div class="bg-white rounded-lg shadow p-6 mb-6">
                     <h2 class="text-lg font-semibold mb-4">P2P Configuration</h2>
 
@@ -319,6 +332,7 @@ pub fn ApiServer() -> impl IntoView {
                     }}
                 </div>
 
+                // 快速连接说明
                 <div class="bg-white rounded-lg shadow p-6">
                     <h2 class="text-lg font-semibold mb-4">Quick Connect</h2>
                     <div class="bg-gray-50 p-4 rounded-lg">
@@ -345,6 +359,7 @@ curl -X POST https://p2p.williw.ai/{share_code()}/v1/chat/completions \
                 </div>
             </main>
 
+            // 底部导航栏
             <nav class="fixed bottom-0 left-0 right-0 bg-white border-t">
                 <div class="flex justify-around py-2">
                     <a href="/local-models" class="flex flex-col items-center p-2 text-gray-600">

@@ -1,12 +1,18 @@
+/// 订单列表页面组件
 use leptos::*;
 use crate::api::ApiClient;
 use williw_shared::Order;
 
+/// 订单列表页面组件
+/// 展示用户的所有订单
 #[component]
 pub fn Orders() -> impl IntoView {
+    // 订单列表
     let (orders, set_orders) = create_signal(Vec::<Order>::new());
+    // 加载状态
     let (loading, set_loading) = create_signal(true);
 
+    // 组件挂载时加载订单数据
     on_mount(move || {
         spawn(async move {
             let client = ApiClient::new();
@@ -18,6 +24,7 @@ pub fn Orders() -> impl IntoView {
         });
     });
 
+    /// 获取状态对应的颜色样式
     let status_color = |status: &williw_shared::OrderStatus| -> String {
         match status {
             williw_shared::OrderStatus::Pending => "bg-yellow-100 text-yellow-800".to_string(),
@@ -29,6 +36,7 @@ pub fn Orders() -> impl IntoView {
         }
     };
 
+    /// 格式化状态显示文本
     let format_status = |status: &williw_shared::OrderStatus| -> String {
         format!("{:?}", status).to_lowercase()
     };

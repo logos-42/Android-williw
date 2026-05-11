@@ -1,7 +1,7 @@
 use axum::{
     Router,
     routing::{get, post, delete},
-    extract::{State, Json, Path},
+    extract::{Json, Path, Extension},
 };
 use std::sync::Arc;
 
@@ -9,7 +9,7 @@ use crate::AppState;
 use crate::services::P2pService;
 use williw_shared::{ApiResponse, P2pConfig, P2pConnectionInfo, P2pStatus, P2pTunnelRequest, P2pTunnelResponse};
 
-pub fn routes() -> Router<Arc<AppState>> {
+pub fn routes() -> Router {
     Router::new()
         .route("/status", get(get_p2p_status))
         .route("/config", get(get_p2p_config).post(update_p2p_config))
@@ -23,21 +23,21 @@ pub fn routes() -> Router<Arc<AppState>> {
 }
 
 async fn get_p2p_status(
-    State(_state): State<Arc<AppState>>,
+    Extension(_state): Extension<Arc<AppState>>,
 ) -> Json<ApiResponse<P2pStatus>> {
     let service = P2pService::new();
     Json(ApiResponse::success(service.get_status().await))
 }
 
 async fn get_p2p_config(
-    State(_state): State<Arc<AppState>>,
+    Extension(_state): Extension<Arc<AppState>>,
 ) -> Json<ApiResponse<P2pConfig>> {
     let service = P2pService::new();
     Json(ApiResponse::success(service.get_config().await))
 }
 
 async fn update_p2p_config(
-    State(_state): State<Arc<AppState>>,
+    Extension(_state): Extension<Arc<AppState>>,
     Json(config): Json<P2pConfig>,
 ) -> Json<ApiResponse<P2pConfig>> {
     let service = P2pService::new();
@@ -45,7 +45,7 @@ async fn update_p2p_config(
 }
 
 async fn p2p_go_online(
-    State(_state): State<Arc<AppState>>,
+    Extension(_state): Extension<Arc<AppState>>,
 ) -> Json<ApiResponse<P2pConnectionInfo>> {
     let service = P2pService::new();
 
@@ -56,7 +56,7 @@ async fn p2p_go_online(
 }
 
 async fn p2p_go_offline(
-    State(_state): State<Arc<AppState>>,
+    Extension(_state): Extension<Arc<AppState>>,
 ) -> Json<ApiResponse<String>> {
     let service = P2pService::new();
 
@@ -67,7 +67,7 @@ async fn p2p_go_offline(
 }
 
 async fn get_connection_info(
-    State(_state): State<Arc<AppState>>,
+    Extension(_state): Extension<Arc<AppState>>,
 ) -> Json<ApiResponse<P2pConnectionInfo>> {
     let service = P2pService::new();
 
@@ -78,7 +78,7 @@ async fn get_connection_info(
 }
 
 async fn connect_to_peer(
-    State(_state): State<Arc<AppState>>,
+    Extension(_state): Extension<Arc<AppState>>,
     Path(peer_id): Path<String>,
 ) -> Json<ApiResponse<P2pTunnelResponse>> {
     let service = P2pService::new();
@@ -90,7 +90,7 @@ async fn connect_to_peer(
 }
 
 async fn share_connection(
-    State(_state): State<Arc<AppState>>,
+    Extension(_state): Extension<Arc<AppState>>,
     Json(req): Json<P2pTunnelRequest>,
 ) -> Json<ApiResponse<P2pTunnelResponse>> {
     let service = P2pService::new();
@@ -102,7 +102,7 @@ async fn share_connection(
 }
 
 async fn disconnect_tunnel(
-    State(_state): State<Arc<AppState>>,
+    Extension(_state): Extension<Arc<AppState>>,
     Path(tunnel_id): Path<String>,
 ) -> Json<ApiResponse<()>> {
     let service = P2pService::new();
@@ -114,7 +114,7 @@ async fn disconnect_tunnel(
 }
 
 async fn test_connection(
-    State(_state): State<Arc<AppState>>,
+    Extension(_state): Extension<Arc<AppState>>,
 ) -> Json<ApiResponse<williw_shared::ConnectionQuality>> {
     let service = P2pService::new();
 

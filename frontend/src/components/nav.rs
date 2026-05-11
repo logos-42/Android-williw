@@ -1,5 +1,8 @@
+/// 导航栏组件
+
 use leptos::*;
 
+/// 顶部导航栏组件
 #[component]
 pub fn Nav() -> impl IntoView {
     view! {
@@ -16,6 +19,7 @@ pub fn Nav() -> impl IntoView {
     }
 }
 
+/// 移动端底部导航栏组件
 #[component]
 pub fn MobileNav() -> impl IntoView {
     view! {

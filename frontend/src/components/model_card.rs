@@ -1,11 +1,22 @@
+/// 模型卡片组件
 use leptos::*;
 use williw_shared::AiModel;
 
+/// 模型卡片属性
+#[derive(Clone)]
+pub struct ModelCardProps {
+    /// AI模型数据
+    pub model: AiModel,
+}
+
+/// 模型卡片组件
+/// 在模型列表中展示单个模型的信息
 #[component]
 pub fn ModelCard(props: ModelCardProps) -> impl IntoView {
     let model = props.model;
     let category = format!("{:?}", model.category).to_lowercase();
 
+    /// 获取类别图标
     let category_icon = move || -> String {
         match model.category {
             williw_shared::ModelCategory::Llm => "💬".to_string(),
@@ -42,9 +53,4 @@ pub fn ModelCard(props: ModelCardProps) -> impl IntoView {
             </div>
         </a>
     }
-}
-
-#[derive(Clone)]
-pub struct ModelCardProps {
-    pub model: AiModel,
 }

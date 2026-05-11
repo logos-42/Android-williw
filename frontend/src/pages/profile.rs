@@ -1,11 +1,17 @@
+/// 个人资料页面组件
 use leptos::*;
 use crate::api::ApiClient;
 
+/// 个人资料页面组件
+/// 展示用户信息和设置选项
 #[component]
 pub fn Profile() -> impl IntoView {
+    // 用户资料
     let (profile, set_profile) = create_signal(Option::<crate::api::ProfileResponse>::None);
+    // 加载状态
     let (loading, set_loading) = create_signal(true);
 
+    // 组件挂载时加载资料
     on_mount(move || {
         spawn(async move {
             let client = ApiClient::new();
@@ -17,6 +23,7 @@ pub fn Profile() -> impl IntoView {
         });
     });
 
+    /// 处理断开钱包连接
     let handle_disconnect = move || {
         let storage = web_sys::window().unwrap().local_storage().unwrap().unwrap();
         storage.remove_item("auth_token").ok();
@@ -46,6 +53,7 @@ pub fn Profile() -> impl IntoView {
                     } else if let Some(p) = profile() {
                         view! {
                             <div class="space-y-6">
+                                // 钱包信息卡片
                                 <div class="bg-white rounded-lg shadow p-6">
                                     <h2 class="text-lg font-semibold mb-4">Wallet</h2>
                                     <div class="bg-gray-100 p-4 rounded-lg">
@@ -64,6 +72,7 @@ pub fn Profile() -> impl IntoView {
                                     </div>
                                 </div>
 
+                                // 统计信息卡片
                                 <div class="bg-white rounded-lg shadow p-6">
                                     <h2 class="text-lg font-semibold mb-4">Statistics</h2>
                                     <div class="grid grid-cols-2 gap-4">
@@ -78,6 +87,7 @@ pub fn Profile() -> impl IntoView {
                                     </div>
                                 </div>
 
+                                // 设置卡片
                                 <div class="bg-white rounded-lg shadow p-6">
                                     <h2 class="text-lg font-semibold mb-4">Settings</h2>
                                     <div class="space-y-3">

@@ -1,17 +1,32 @@
+/// 支付页面组件
 use leptos::*;
 use uuid::Uuid;
 use crate::api::ApiClient;
 use williw_shared::{PaymentMethod, PaymentResponse, Order};
 
+/// 支付页面属性
+#[derive(Clone)]
+pub struct PaymentProps {
+    /// 订单ID
+    pub order_id: Uuid,
+}
+
+/// 支付页面组件
+/// 展示订单信息并提供多种支付方式
 #[component]
 pub fn Payment(props: PaymentProps) -> impl IntoView {
+    // 订单数据
     let (order, set_order) = create_signal(Option::<Order>::None);
+    // 支付信息
     let (payment_info, set_payment_info) = create_signal(Option::<PaymentResponse>::None);
+    // 加载状态
     let (loading, set_loading) = create_signal(true);
+    // 选中的支付方式
     let (selected_method, set_selected_method) = create_signal(PaymentMethod::Usdt);
 
     let order_id = props.order_id;
 
+    // 组件挂载时加载订单状态
     on_mount(move || {
         spawn(async move {
             let client = ApiClient::new();
@@ -23,6 +38,7 @@ pub fn Payment(props: PaymentProps) -> impl IntoView {
         });
     });
 
+    /// 发起支付
     let initiate_payment = move |method: PaymentMethod| {
         set_loading(true);
         set_selected_method(method);
@@ -39,6 +55,7 @@ pub fn Payment(props: PaymentProps) -> impl IntoView {
         });
     };
 
+    /// 获取支付方式标签
     let method_labels = |method: &PaymentMethod| -> String {
         match method {
             PaymentMethod::Wechat => "WeChat Pay".to_string(),
@@ -165,9 +182,4 @@ pub fn Payment(props: PaymentProps) -> impl IntoView {
             </main>
         </div>
     }
-}
-
-#[derive(Clone)]
-pub struct PaymentProps {
-    pub order_id: Uuid,
 }

@@ -74,7 +74,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/health", axum::routing::get(|| async { "OK" }))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
-        .layer(middleware::from_fn(move |request, next| {
+        .layer(middleware::from_fn(move |request: axum::http::Request<axum::body::Body>, next: middleware::Next| {
             let state = state.clone();
             async move {
                 let mut request = request;
