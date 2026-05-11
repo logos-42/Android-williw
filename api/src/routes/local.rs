@@ -1,7 +1,7 @@
 use axum::{
     Router,
     routing::{get, post, delete},
-    extract::{State, Json, Path, Extension, Query},
+    extract::{Json, Path, Extension},
 };
 use std::sync::Arc;
 use uuid::Uuid;
@@ -10,10 +10,10 @@ use crate::AppState;
 use crate::services::LocalModelService;
 use williw_shared::{
     ApiResponse, LocalModel, LocalApiConfig, DeviceInfo, InferenceRequest,
-    InferenceResponse, ModelManifest, DownloadRequest, LocalModelStatus,
+    InferenceResponse, ModelManifest, DownloadRequest,
 };
 
-pub fn routes() -> Router<Arc<AppState>> {
+pub fn routes() -> Router {
     Router::new()
         .route("/models", get(list_local_models))
         .route("/models/:id", get(get_local_model))
@@ -28,9 +28,8 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/server/config", get(get_server_config).post(update_server_config))
 }
 
-/// 获取本地模型列表处理器
 async fn list_local_models(
-    State(state): State<Arc<AppState>>,
+    Extension(state): Extension<Arc<AppState>>,
 ) -> Json<ApiResponse<Vec<LocalModel>>> {
     let service = LocalModelService::new(state.db.clone());
 
@@ -40,9 +39,8 @@ async fn list_local_models(
     }
 }
 
-/// 获取指定本地模型详情处理器
 async fn get_local_model(
-    State(state): State<Arc<AppState>>,
+    Extension(state): Extension<Arc<AppState>>,
     Path(id): Path<Uuid>,
 ) -> Json<ApiResponse<LocalModel>> {
     let service = LocalModelService::new(state.db.clone());
@@ -54,9 +52,8 @@ async fn get_local_model(
     }
 }
 
-/// 下载模型处理器
 async fn download_model(
-    State(state): State<Arc<AppState>>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(req): Json<DownloadRequest>,
 ) -> Json<ApiResponse<LocalModel>> {
     let service = LocalModelService::new(state.db.clone());
@@ -67,9 +64,8 @@ async fn download_model(
     }
 }
 
-/// 删除本地模型处理器
 async fn delete_model(
-    State(state): State<Arc<AppState>>,
+    Extension(state): Extension<Arc<AppState>>,
     Path(id): Path<Uuid>,
 ) -> Json<ApiResponse<()>> {
     let service = LocalModelService::new(state.db.clone());
@@ -80,9 +76,8 @@ async fn delete_model(
     }
 }
 
-/// 设置默认模型处理器
 async fn set_default_model(
-    State(state): State<Arc<AppState>>,
+    Extension(state): Extension<Arc<AppState>>,
     Path(id): Path<Uuid>,
 ) -> Json<ApiResponse<LocalModel>> {
     let service = LocalModelService::new(state.db.clone());
@@ -93,14 +88,12 @@ async fn set_default_model(
     }
 }
 
-/// 获取模型清单处理器
 async fn get_model_manifest() -> Json<ApiResponse<ModelManifest>> {
     Json(ApiResponse::success(ModelManifest::default_manifest()))
 }
 
-/// 运行推理处理器
 async fn run_inference(
-    State(state): State<Arc<AppState>>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(req): Json<InferenceRequest>,
 ) -> Json<ApiResponse<InferenceResponse>> {
     let service = LocalModelService::new(state.db.clone());
@@ -111,9 +104,8 @@ async fn run_inference(
     }
 }
 
-/// 获取设备信息处理器
 async fn get_device_info(
-    State(state): State<Arc<AppState>>,
+    Extension(state): Extension<Arc<AppState>>,
 ) -> Json<ApiResponse<DeviceInfo>> {
     let service = LocalModelService::new(state.db.clone());
 
@@ -123,9 +115,8 @@ async fn get_device_info(
     }
 }
 
-/// 启动本地服务器处理器
 async fn start_local_server(
-    State(state): State<Arc<AppState>>,
+    Extension(state): Extension<Arc<AppState>>,
 ) -> Json<ApiResponse<String>> {
     let service = LocalModelService::new(state.db.clone());
 
@@ -135,9 +126,8 @@ async fn start_local_server(
     }
 }
 
-/// 停止本地服务器处理器
 async fn stop_local_server(
-    State(state): State<Arc<AppState>>,
+    Extension(state): Extension<Arc<AppState>>,
 ) -> Json<ApiResponse<String>> {
     let service = LocalModelService::new(state.db.clone());
 
@@ -147,9 +137,8 @@ async fn stop_local_server(
     }
 }
 
-/// 获取本地API服务器配置处理器
 async fn get_server_config(
-    State(state): State<Arc<AppState>>,
+    Extension(state): Extension<Arc<AppState>>,
 ) -> Json<ApiResponse<LocalApiConfig>> {
     let service = LocalModelService::new(state.db.clone());
 
@@ -159,9 +148,8 @@ async fn get_server_config(
     }
 }
 
-/// 更新本地API服务器配置处理器
 async fn update_server_config(
-    State(state): State<Arc<AppState>>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(config): Json<LocalApiConfig>,
 ) -> Json<ApiResponse<LocalApiConfig>> {
     let service = LocalModelService::new(state.db.clone());

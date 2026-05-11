@@ -1,18 +1,34 @@
+/// 模型详情页面组件
 use leptos::*;
 use uuid::Uuid;
 use crate::api::ApiClient;
 use williw_shared::{AiModel, PaymentMethod};
 
+/// 模型详情页面属性
+#[derive(Clone)]
+pub struct ModelDetailProps {
+    /// 模型ID
+    pub id: Uuid,
+}
+
+/// 模型详情页面组件
+/// 展示模型详细信息并提供购买选项
 #[component]
 pub fn ModelDetail(props: ModelDetailProps) -> impl IntoView {
+    // 模型数据
     let (model, set_model) = create_signal(Option::<AiModel>::None);
+    // 加载状态
     let (loading, set_loading) = create_signal(true);
+    // 购买数量
     let (amount, set_amount) = create_signal(1.0);
+    // 创建订单中状态
     let (creating, set_creating) = create_signal(false);
+    // 订单ID
     let (order_id, set_order_id) = create_signal(Option::<Uuid>::None);
 
     let model_id = props.id;
 
+    // 组件挂载时加载模型数据
     on_mount(move || {
         spawn(async move {
             let client = ApiClient::new();
@@ -24,6 +40,7 @@ pub fn ModelDetail(props: ModelDetailProps) -> impl IntoView {
         });
     });
 
+    /// 处理购买请求
     let handle_request = move || {
         if let Some(m) = model() {
             set_creating(true);
@@ -35,6 +52,7 @@ pub fn ModelDetail(props: ModelDetailProps) -> impl IntoView {
                     Ok(order) => {
                         let id = order.id;
                         set_order_id(Some(id));
+                        // 跳转到支付页面
                         web_sys::window().unwrap().location().set_href(&format!("/payment/{}", id)).ok();
                     }
                     Err(_) => {
@@ -127,9 +145,4 @@ pub fn ModelDetail(props: ModelDetailProps) -> impl IntoView {
             </main>
         </div>
     }
-}
-
-#[derive(Clone)]
-pub struct ModelDetailProps {
-    pub id: Uuid,
 }

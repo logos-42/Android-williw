@@ -1,3 +1,6 @@
+/// 页面模块
+/// 包含应用的所有页面组件
+
 pub mod login;
 pub mod models;
 pub mod model_detail;
@@ -9,6 +12,8 @@ pub mod api_server;
 
 use leptos::*;
 
+/// 首页组件
+/// 展示应用概览和主要功能入口
 #[component]
 pub fn Home() -> impl IntoView {
     view! {
@@ -20,25 +25,31 @@ pub fn Home() -> impl IntoView {
                 </div>
             </header>
             <main class="max-w-7xl mx-auto py-6 px-4">
+                // 功能卡片网格
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    // 本地模型入口
                     <a href="/local-models" class="block p-6 bg-white rounded-lg shadow hover:shadow-lg transition">
                         <h2 class="text-xl font-semibold mb-2">📥 Local Models</h2>
                         <p class="text-gray-600">Download AI models to your phone</p>
                     </a>
+                    // API服务器入口
                     <a href="/api-server" class="block p-6 bg-white rounded-lg shadow hover:shadow-lg transition">
                         <h2 class="text-xl font-semibold mb-2">🔌 API Server</h2>
                         <p class="text-gray-600">Share models with other devices</p>
                     </a>
+                    // 云端模型入口
                     <a href="/models" class="block p-6 bg-white rounded-lg shadow hover:shadow-lg transition">
                         <h2 class="text-xl font-semibold mb-2">☁️ Cloud Models</h2>
                         <p class="text-gray-600">Access remote compute power</p>
                     </a>
+                    // 订单入口
                     <a href="/orders" class="block p-6 bg-white rounded-lg shadow hover:shadow-lg transition">
                         <h2 class="text-xl font-semibold mb-2">📋 My Orders</h2>
                         <p class="text-gray-600">View your compute requests</p>
                     </a>
                 </div>
 
+                // 推广横幅
                 <div class="mt-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg shadow-lg p-8 text-white">
                     <h2 class="text-2xl font-bold mb-2">Run AI Anywhere</h2>
                     <p class="text-blue-100 mb-4">
@@ -55,6 +66,7 @@ pub fn Home() -> impl IntoView {
                 </div>
             </main>
 
+            // 底部导航栏
             <nav class="fixed bottom-0 left-0 right-0 bg-white border-t">
                 <div class="flex justify-around py-2">
                     <a href="/" class="flex flex-col items-center p-2 text-blue-600">

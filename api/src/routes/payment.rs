@@ -1,7 +1,7 @@
 use axum::{
     Router,
     routing::{get, post},
-    extract::{State, Json, Path, Extension},
+    extract::{Json, Path, Extension},
 };
 use std::sync::Arc;
 use uuid::Uuid;
@@ -10,7 +10,7 @@ use crate::AppState;
 use crate::services::PaymentService;
 use williw_shared::{ApiResponse, Order, PaymentMethod, PaymentRequest, PaymentResponse};
 
-pub fn routes() -> Router<Arc<AppState>> {
+pub fn routes() -> Router {
     Router::new()
         .route("/create", post(create_order))
         .route("/initiate", post(initiate_payment))
@@ -19,9 +19,8 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/callback/:provider", post(payment_callback))
 }
 
-/// 创建订单处理器
 async fn create_order(
-    State(state): State<Arc<AppState>>,
+    Extension(state): Extension<Arc<AppState>>,
     Extension(user_id): Extension<Uuid>,
     Json(req): Json<PaymentRequest>,
 ) -> Json<ApiResponse<Order>> {
@@ -33,9 +32,8 @@ async fn create_order(
     }
 }
 
-/// 发起支付处理器
 async fn initiate_payment(
-    State(state): State<Arc<AppState>>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(req): Json<PaymentRequest>,
 ) -> Json<ApiResponse<PaymentResponse>> {
     let service = PaymentService::new(state.db.clone());
@@ -46,9 +44,8 @@ async fn initiate_payment(
     }
 }
 
-/// 获取支付状态处理器
 async fn get_payment_status(
-    State(state): State<Arc<AppState>>,
+    Extension(state): Extension<Arc<AppState>>,
     Path(id): Path<Uuid>,
 ) -> Json<ApiResponse<Order>> {
     let service = PaymentService::new(state.db.clone());
@@ -60,9 +57,8 @@ async fn get_payment_status(
     }
 }
 
-/// 获取用户订单列表处理器
 async fn get_user_orders(
-    State(state): State<Arc<AppState>>,
+    Extension(state): Extension<Arc<AppState>>,
     Extension(user_id): Extension<Uuid>,
 ) -> Json<ApiResponse<Vec<Order>>> {
     let service = PaymentService::new(state.db.clone());
@@ -73,16 +69,13 @@ async fn get_user_orders(
     }
 }
 
-/// 支付回调处理器
-/// 处理来自支付宝、微信等支付渠道的回调通知
 async fn payment_callback(
-    State(state): State<Arc<AppState>>,
+    Extension(state): Extension<Arc<AppState>>,
     Path(provider): Path<String>,
     Json(payload): Json<serde_json::Value>,
 ) -> Json<ApiResponse<String>> {
     let service = PaymentService::new(state.db.clone());
 
-    // 从回调payload中提取订单ID
     if let Some(order_id) = payload.get("order_id").and_then(|v| v.as_str()) {
         if let Ok(uuid) = Uuid::parse_str(order_id) {
             if let Err(e) = service.confirm_payment(uuid).await {

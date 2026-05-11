@@ -11,7 +11,7 @@ mod services;
 // P2P模块公开
 pub mod p2p;
 
-use axum::Router;
+use axum::{Router, middleware};
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
@@ -74,7 +74,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/health", axum::routing::get(|| async { "OK" }))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
-        .with_state(state);
+        .layer(middleware::from_fn(move |request, next| {
+            let state = state.clone();
+            async move {
+                let mut request = request;
+                request.extensions_mut().insert(state);
+                next.run(request).await
+            }
+        }));
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
     tracing::info!("Williw API server running on http://0.0.0.0:8080");
