@@ -51,7 +51,7 @@ impl ModelService {
         amount: f64,
     ) -> Result<ComputeRequest, String> {
         // 验证模型存在
-        let model = self.db.get_model_by_id(&model_id)
+        let _model = self.db.get_model_by_id(&model_id)
             .await
             .map_err(|e| format!("{}", e))?
             .ok_or("Model not found")?;

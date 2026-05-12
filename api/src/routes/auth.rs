@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::{AppState, auth::wallet};
 use crate::models::{LoginRequest, LoginResponse, ProfileResponse};
 use crate::services::AuthService;
-use williw_shared::{ApiResponse, User};
+use williw_shared::ApiResponse;
 
 pub fn routes() -> Router {
     Router::new()

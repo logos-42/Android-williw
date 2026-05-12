@@ -56,14 +56,14 @@ impl SignalingClient {
 
         // 创建双向消息通道
         let (tx, rx) = mpsc::channel::<SignalingMessage>(100);
-        let (out_tx, mut out_rx) = mpsc::channel::<SignalingMessage>(100);
+        let (out_tx, out_rx) = mpsc::channel::<SignalingMessage>(100);
 
-        let peer_id = self.peer_id.clone();
+        let _peer_id = self.peer_id.clone();
         // 启动异步消息处理任务
         tokio::spawn(async move {
             let mut read = read;
             let mut out_rx = out_rx;
-            let mut tx = tx;
+            let tx = tx;
 
             loop {
                 tokio::select! {

@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::AppState;
 use crate::services::PaymentService;
-use williw_shared::{ApiResponse, Order, PaymentMethod, PaymentRequest, PaymentResponse};
+use williw_shared::{ApiResponse, Order, PaymentRequest, PaymentResponse};
 
 pub fn routes() -> Router {
     Router::new()

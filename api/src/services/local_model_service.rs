@@ -108,7 +108,7 @@ impl LocalModelService {
     }
 
     /// 删除本地模型
-    pub async fn delete_model(&self, model_id: Uuid) -> Result<(), String> {
+    pub async fn delete_model(&self, _model_id: Uuid) -> Result<(), String> {
         Ok(())
     }
 
@@ -169,7 +169,7 @@ impl LocalModelService {
     /// 获取设备信息
     /// 返回设备状态和已安装模型列表
     pub async fn get_device_info(&self) -> Result<DeviceInfo, String> {
-        let manifest = ModelManifest::default_manifest();
+        let _manifest = ModelManifest::default_manifest();
         let installed: Vec<LocalModel> = vec![];
 
         Ok(DeviceInfo {

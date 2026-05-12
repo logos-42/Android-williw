@@ -2,14 +2,14 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::RwLock;
 use uuid::Uuid;
 use williw_shared::{
-    ConnectionQuality, NatDiscoveryResult, NatType, PeerEndpoint, P2pTunnelMode, RelayServerConfig,
+    ConnectionQuality, NatDiscoveryResult, NatType, P2pTunnelMode,
     StunServer, TurnServer,
 };
 
-use super::signaling::{SignalingClient, SignalingServer};
+use super::signaling::SignalingClient;
 use super::stun_client::StunClient;
 use super::turn_client::TurnClient;
 
@@ -245,7 +245,7 @@ impl TunnelManager {
             let mut turn_client = TurnClient::new(0, turn_server)?;
             let relay_addr = turn_client.allocate()?;
 
-            let signaling = self.signaling_client.as_mut()
+            let _signaling = self.signaling_client.as_mut()
                 .ok_or("Signaling client not initialized")?;
 
             // 创建权限

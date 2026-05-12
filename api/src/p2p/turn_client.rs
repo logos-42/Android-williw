@@ -254,7 +254,7 @@ impl TurnClient {
     }
 
     /// 通过中继发送数据
-    pub fn send_to_relay(&self, data: &[u8], peer_addr: SocketAddr) -> Result<usize, String> {
+    pub fn send_to_relay(&self, data: &[u8], _peer_addr: SocketAddr) -> Result<usize, String> {
         self.socket
             .send_to(data, self.server_addr)
             .map_err(|e| format!("Failed to send to relay: {}", e))
