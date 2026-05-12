@@ -9,3 +9,16 @@ dist/
 node_modules/
 .env
 .DS_Store
+*williw\frontend\target
+*.tmp
+*.temp
+*~
+.*.swp
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.log
+*.lock
+cache/
+tmp/
+temp/
