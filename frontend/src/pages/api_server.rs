@@ -348,13 +348,13 @@ pub fn ApiServer() -> impl IntoView {
                         <div class="mt-4 text-sm text-gray-600">
                             <p class="font-medium mb-2">Example API Call via P2P:</p>
                             <pre class="bg-gray-800 text-green-400 p-3 rounded text-xs overflow-x-auto">
-curl -X POST https://p2p.williw.ai/{share_code()}/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -d '{
-    "model": "lf25-7b",
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'</pre>
+curl -X POST https://p2p.williw.ai/{share_code()}/v1/chat/completions
+  -H "Content-Type: application/json"
+  -H "Authorization: Bearer YOUR_API_KEY"
+  -d "{
+    \"model\": \"lf25-7b\",
+    \"messages\": [{\"role\": \"user\", \"content\": \"Hello!\"}]
+  }"</pre>
                         </div>
                 </div>
             </main>

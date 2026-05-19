@@ -161,14 +161,14 @@ pub fn Payment(props: PaymentProps) -> impl IntoView {
                                                 on:click={move |_| initiate_payment(PaymentMethod::Eth)}
                                             >
                                                 <span>Ethereum (ETH)</span>
-                                                <span class="text-2xl">⟠</span>
+                                                <span class="text-2xl">ETH</span>
                                             </button>
                                             <button
                                                 class="p-4 border rounded-lg hover:border-blue-500 transition flex items-center justify-between"
                                                 on:click={move |_| initiate_payment(PaymentMethod::Btc)}
                                             >
                                                 <span>Bitcoin (BTC)</span>
-                                                <span class="text-2xl">₿</span>
+                                                <span class="text-2xl">BTC</span>
                                             </button>
                                         </div>
                                     </div>
