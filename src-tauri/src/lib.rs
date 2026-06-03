@@ -1,7 +1,5 @@
 //! Williw — Tauri 2 lib entry (used by both desktop `main.rs` and Android mobile entry).
 
-#![cfg_attr(mobile, tauri::mobile_entry_point)]
-
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
