@@ -322,3 +322,66 @@ fn _unused_sse() -> Sse<impl futures_core::Stream<Item = Result<Event, std::conv
     };
     Sse::new(stream).keep_alive(KeepAlive::default())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_state() -> AppState {
+        let engine = Engine::new();
+        let dir = std::env::temp_dir();
+        engine.configure(EngineConfig::default_for_dir(dir));
+        engine.load().expect("mock engine load");
+        AppState {
+            engine,
+            model_list: vec![ModelInfo {
+                id: "williw-local".into(),
+                object: "model".into(),
+                created: 0,
+                owned_by: "williw".into(),
+            }],
+            api_key: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn health_returns_ok() {
+        let r = health().await;
+        assert_eq!(r, "ok");
+    }
+
+    #[tokio::test]
+    async fn list_models_returns_list() {
+        use axum::extract::State;
+        let s = test_state();
+        let Json(resp) = list_models(State(s)).await;
+        assert_eq!(resp.object, "list");
+        assert_eq!(resp.data.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn status_reports_ready() {
+        use axum::extract::State;
+        let s = test_state();
+        let Json(p) = status(State(s)).await;
+        assert_eq!(p.state, "ready");
+    }
+
+    #[tokio::test]
+    async fn chat_completions_returns_choice() {
+        use axum::extract::State;
+        use axum::Json as AxJson;
+        let s = test_state();
+        let req = ChatCompletionsRequest {
+            model: "williw-local".into(),
+            messages: vec![ChatMessage { role: "user".into(), content: "ping".into() }],
+            max_tokens: Some(8),
+            temperature: None,
+            top_p: None,
+            stop: None,
+            stream: Some(false),
+        };
+        let resp = chat_completions(State(s), axum::http::HeaderMap::new(), AxJson(req)).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+}

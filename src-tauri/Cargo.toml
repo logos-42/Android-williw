@@ -25,6 +25,7 @@ uuid = { workspace = true }
 anyhow = { workspace = true }
 async-stream = "0.3"
 futures-core = "0.3"
+parking_lot = "0.12"
 
 [[bin]]
 name = "williw"

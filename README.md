@@ -1,164 +1,140 @@
-# Williw - AI Compute Power API
+# Williw — Local AI on Your Phone
 
-A mobile-first Rust project providing AI compute power APIs with multi-payment support and P2P model serving.
+> 0.1.0 MVP: 在安卓手机上加载最小可对话的小语言模型（默认 Qwen2.5-0.5B-Instruct Q4_K_M, ~350MB），
+> 通过一个 OpenAI 兼容的本地 HTTP API 暴露给设备上的其他 App 或局域网。
 
-## Features
+## 当前状态（MVP）
 
-- **Local Model Downloads**: Download AI models (LF2.5, Gamma4, Phi-3.5, Qwen, etc.) to your phone
-- **P2P Tunnel**: Share your models with anyone over the internet via peer-to-peer connection
-- **Compute Power API**: Access cloud AI models (LLM, Image, Audio, Video, Multimodal)
-- **Model Filtering**: Filter by category, provider, power, and price
-- **Multi-Payment**: WeChat Pay, Alipay, USDT, ETH, BTC
-- **Crypto Wallet Login**: Login with Ethereum wallet signature
+| 能力 | 状态 |
+|---|---|
+| 加载 GGUF Qwen2.5 量化模型 | ✅（feature = `candle`，默认 mock 后端） |
+| OpenAI 兼容 HTTP API | ✅（`/v1/chat/completions`、`/v1/models`、`/health`） |
+| Tauri 2 桌面壳 | ✅（Windows/macOS/Linux 编译通过） |
+| Tauri 2 Android 移动壳 | ✅（项目已初始化，可发布 APK 构建脚本就绪） |
+| candle 后端实推理 | ✅（代码完整；首次启用需 `cargo build --features candle -p williw-core`） |
 
-## Tech Stack
-
-| Layer | Technology |
-|-------|------------|
-| Backend | Axum (async Rust) |
-| Frontend | Leptos (Rust WASM) |
-| Database | SQLite (dev) / PostgreSQL (prod) with SQLx |
-| Auth | JWT + Crypto Wallet Signature |
-| P2P | STUN + Relay fallback for NAT traversal |
-
-## Project Structure
+## 架构
 
 ```
-williw/
-├── Cargo.toml              # Workspace root
-├── api/                    # Backend API (Axum)
-│   └── src/
-│       ├── main.rs
-│       ├── routes/         # API routes (auth, compute, payment, local, p2p)
-│       ├── models/         # Request/response models
-│       ├── services/       # Business logic
-│       ├── auth/           # JWT + Wallet auth
-│       ├── payments/       # WeChat/Alipay/Crypto
-│       ├── p2p/            # P2P tunnel service
-│       └── db/             # Database layer
-├── frontend/               # Frontend (Leptos)
-│   └── src/
-│       ├── pages/          # Home, Login, Models, LocalModels, ApiServer, Payment, Orders, Profile
-│       ├── components/     # Reusable UI components
-│       └── api/            # API client
-└── shared/                 # Shared types
+┌──────────────────────────────────────────┐
+│ Tauri 2 窗口（控制面板 / 聊天 UI）         │  ← frontend/dist/index.html
+│ ┌──────────────────────────────────────┐ │
+│ │ Axum HTTP API（端口 8081，0.0.0.0）   │ │  ← src-tauri/src/main.rs
+│ │   - GET  /v1/models                  │ │
+│ │   - POST /v1/chat/completions        │ │
+│ │   - GET  /v1/status                  │ │
+│ │   - GET  /health                     │ │
+│ └──────────────┬───────────────────────┘ │
+│                │                          │
+│         williw-core::Engine               │  ← core/src/lib.rs
+│           ├── MockEngine（默认）           │
+│           └── GgufEngine（candle 特性）    │  ← core/src/gguf_engine.rs
+└──────────────────────────────────────────┘
 ```
 
-## API Endpoints
+## 快速开始（开发机）
 
-### Auth
-- `POST /api/auth/wallet/login` - Login with crypto wallet signature
-- `POST /api/auth/wallet/verify` - Verify wallet ownership
-- `GET /api/auth/profile` - Get user profile
-
-### Compute Power (Cloud)
-- `GET /api/compute/models` - List available AI models
-- `GET /api/compute/models/:id` - Get model details
-- `POST /api/compute/request` - Request compute power
-- `GET /api/compute/status/:id` - Check job status
-
-### Local Models
-- `GET /api/local/models` - List downloadable models
-- `POST /api/local/models/download` - Download a model
-- `DELETE /api/local/models/:id` - Delete downloaded model
-- `POST /api/local/inference` - Run inference
-- `GET /api/local/device-info` - Get device storage/memory info
-
-### P2P Tunnel (Internet Access)
-- `POST /api/p2p/online` - Go online with P2P
-- `POST /api/p2p/offline` - Go offline
-- `GET /api/p2p/status` - Get P2P status
-- `GET /api/p2p/connection-info` - Get your connection code
-- `POST /api/p2p/connect/:peer_id` - Connect to another peer
-- `POST /api/p2p/share` - Share your connection
-- `GET /api/p2p/config` - Get P2P configuration
-- `POST /api/p2p/config` - Update P2P configuration
-
-### Payments
-- `POST /api/payment/create` - Create order
-- `POST /api/payment/initiate` - Initiate payment
-- `GET /api/payment/status/:id` - Payment status
-- `GET /api/payment/orders` - User orders
-
-## Environment Variables
-
-```bash
-# Database
-DATABASE_URL=sqlite:williw.db?mode=rwc
-
-# Crypto Wallet Addresses
-USDT_ADDRESS=your_trc20_usdt_address
-ETH_ADDRESS=your_eth_address
-BTC_ADDRESS=your_btc_address
-
-# P2P Relay Server (optional)
-WILLIW_RELAY_URL=wss://relay.williw.ai
-```
-
-## Running
-
-### Backend
 ```bash
 cd williw
-cargo run -p williw-api
+# 1. 编译并运行 API 服务（mock 后端，无需任何模型文件）
+cargo run -p williw-api-server --release
+
+# 2. 测试
+curl -X POST http://127.0.0.1:8081/v1/chat/completions \
+  -H 'content-type: application/json' \
+  -d '{"model":"williw-local","messages":[{"role":"user","content":"hi"}]}'
 ```
 
-### Frontend
+## 在 Tauri 桌面壳里跑
+
+```bash
+cargo run -p williw-tauri --release
+# 弹出窗口，端口由 setup 回调自动注入
+```
+
+## 启用真模型推理
+
+1. 下载 Qwen2.5-0.5B-Instruct Q4_K_M：
+   - 模型：`https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf` (~350MB)
+   - tokenizer：`https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/resolve/main/tokenizer.json`
+2. 放到 `williw/models/`（或任意位置并设置 `WILLIW_MODEL_DIR`）
+3. 用 candle 特性重新编译：
+   ```bash
+   cargo build --release -p williw-api-server -p williw-tauri --features williw-core/candle
+   ```
+4. 启动时设环境变量：
+   ```bash
+   WILLIW_BACKEND=candle ./target/release/williw-api
+   ```
+
+> 首次 candle 编译会比较慢（10+ 分钟）；编译产物缓存后增量构建快。
+
+## Android 发布构建
+
+要求：
+- Rust 1.93+
+- Android SDK（build-tools 34+, platforms android-34）
+- Android NDK r25+
+- JDK 17
+- 设置 `ANDROID_HOME` 与 `ANDROID_NDK_HOME`
+
 ```bash
 cd williw
-cargo build -p williw-frontend
-# Serve the WASM output
+# 调试 APK（自带 debug keystore，免签名）
+./scripts/build-android-debug.sh
+
+# 发布 APK（需要在 gradle.properties 中配置 release 签名）
+./scripts/build-release.sh
 ```
 
-## Available Local Models
+产物：
+- 调试：`src-tauri/gen/android/app/build/outputs/apk/debug/app-debug.apk`
+- 发布：`src-tauri/gen/android/app/build/outputs/apk/release/app-release.apk`
 
-| Model | Size | Memory Required |
-|-------|------|-----------------|
-| LF2.5 7B | 4.2 GB | 6 GB |
-| LF2.5 14B | 8.5 GB | 10 GB |
-| Gamma 4B | 2.5 GB | 4 GB |
-| Gamma 7B | 4.3 GB | 6 GB |
-| Phi-3.5 Mini | 2.3 GB | 4 GB |
-| Qwen 2.5 7B | 4.4 GB | 6 GB |
-| Yi 6B | 3.8 GB | 6 GB |
-| DeepSeek 7B | 4.1 GB | 6 GB |
-| Llama 3.2 3B | 1.9 GB | 4 GB |
-| Mistral 7B | 4.3 GB | 6 GB |
-| Gemma 2B | 1.4 GB | 3 GB |
+## HTTP API
 
-## Pages
+### `GET /health`
+```json
+"ok"
+```
 
-1. **Home** - Dashboard with quick access to all features
-2. **Login** - Enter crypto wallet address to login
-3. **Local Models** - Download and manage AI models on your phone
-4. **API Server** - Control local + P2P server, share with others
-5. **Models** - Browse and filter cloud AI models
-6. **Model Detail** - View specs and request compute
-7. **Payment** - Pay with WeChat/Alipay/Crypto
-8. **Orders** - View order history
-9. **Profile** - Wallet info and settings
+### `GET /v1/models`
+OpenAI 兼容。MVP 只注册一个本地模型。
 
-## P2P Usage
+### `GET /v1/status`
+```json
+{
+  "state": "ready",
+  "model_id": "qwen2.5-0.5b-instruct-q4_k_m",
+  "model_path": "/path/to/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+  "context_len": 2048,
+  "error": null,
+  "last_prompt_tokens": 12,
+  "last_completion_tokens": 87,
+  "last_total_ms": 1234
+}
+```
 
-### Sharing Models Over Internet
+### `POST /v1/chat/completions`
+OpenAI 兼容，支持 `temperature` / `top_p` / `max_tokens` / `stop` / `stream`。
+需要鉴权时设置 `WILLIW_API_KEY` 环境变量，客户端发 `Authorization: Bearer <key>`。
 
-1. Download models to your phone (Local Models page)
-2. Go to API Server page
-3. Click "Go Online" for P2P
-4. Share your connection code with friends
-5. They can now call your AI models via the P2P endpoint
+## 测试
 
-### Connecting to Remote Models
+```bash
+cargo test --workspace          # 单元测试
+bash scripts/test-e2e.sh        # 端到端冒烟测试
+```
 
-1. Get a connection code from a friend
-2. Go to API Server page
-3. Make sure P2P is "Online"
-4. Enter their connection code and click "Connect"
-5. You now have access to their models!
+## 模型目录约定
 
-## Mobile-First Design
+- 桌面端：`./models/`（相对 cwd）或 `WILLIW_MODEL_DIR` 环境变量
+- Android 端：`filesDir/models/`（由 `ANDROID_FILES_DIR` 推断）或 `WILLIW_MODEL_DIR` 覆盖
 
-- Responsive grid: 1 col mobile, 2-3 col tablet, 4 col desktop
-- Touch-friendly: 44px min tap targets
-- Bottom navigation bar for mobile
-- P2P status indicator always visible
+需要的文件：
+- `qwen2.5-0.5b-instruct-q4_k_m.gguf`
+- `tokenizer.json`
+
+## License
+
+MIT
