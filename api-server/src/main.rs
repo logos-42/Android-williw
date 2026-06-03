@@ -1,11 +1,13 @@
-//! Williw — Tauri 2 桌面 + Android 入口
+//! williw-api-server
 //!
-//! 启动顺序：
-//! 1. 解析模型目录（Android 端 `app filesDir`，桌面端 `./models`）
-//! 2. 启动 Axum HTTP 服务（端口 8081），绑定 0.0.0.0
-//! 3. 启动 Tauri 应用窗口（包含极简 HTML/JS 控制面板）
-
-#![cfg_attr(mobile, tauri::mobile_entry_point)]
+//! 独立 Axum HTTP 服务，承载本地推理并提供 OpenAI 兼容的
+//! `/v1/chat/completions`、`/v1/models`、`/health` 等端点。
+//!
+//! 启动模型：
+//! - 默认：`WILLIW_BACKEND=mock` — 不需要任何模型文件。
+//! - 真实：`WILLIW_BACKEND=candle` + `WILLIW_MODEL_DIR=/path/to/models` + 启用 candle feature。
+//!
+//! 端口：`WILLIW_API_PORT`（默认 8081）
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -15,12 +17,15 @@ use axum::{
     Json, Router,
     extract::State,
     http::StatusCode,
-    response::{IntoResponse, Response},
+    response::{
+        IntoResponse, Response,
+        sse::{Event, KeepAlive, Sse},
+    },
     routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
-use tauri::Manager;
 use tokio::net::TcpListener;
+use tokio::sync::broadcast;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -43,17 +48,25 @@ struct ModelInfo {
 }
 
 #[derive(Debug, Serialize)]
-struct ModelsResponse { object: String, data: Vec<ModelInfo> }
+struct ModelsResponse {
+    object: String,
+    data: Vec<ModelInfo>,
+}
 
 #[derive(Debug, Deserialize)]
 struct ChatCompletionsRequest {
     model: String,
     messages: Vec<ChatMessage>,
-    #[serde(default)] max_tokens: Option<u32>,
-    #[serde(default)] temperature: Option<f32>,
-    #[serde(default)] top_p: Option<f32>,
-    #[serde(default)] stop: Option<Vec<String>>,
-    #[serde(default)] stream: Option<bool>,
+    #[serde(default)]
+    max_tokens: Option<u32>,
+    #[serde(default)]
+    temperature: Option<f32>,
+    #[serde(default)]
+    top_p: Option<f32>,
+    #[serde(default)]
+    stop: Option<Vec<String>>,
+    #[serde(default)]
+    stream: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -81,15 +94,26 @@ struct Usage {
 }
 
 #[derive(Debug, Serialize)]
-struct ApiError { error: ApiErrorBody }
+struct ApiError {
+    error: ApiErrorBody,
+}
+
 #[derive(Debug, Serialize)]
-struct ApiErrorBody { message: String, #[serde(rename = "type")] kind: String }
+struct ApiErrorBody {
+    message: String,
+    #[serde(rename = "type")]
+    kind: String,
+    code: Option<String>,
+}
 
 impl ApiError {
     fn new(msg: impl Into<String>, kind: &str) -> Self {
-        Self { error: ApiErrorBody { message: msg.into(), kind: kind.to_string() } }
+        Self {
+            error: ApiErrorBody { message: msg.into(), kind: kind.to_string(), code: None },
+        }
     }
 }
+
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let body = serde_json::to_string(&self).unwrap_or_else(|_| r#"{"error":"unknown"}"#.into());
@@ -109,12 +133,33 @@ struct StatusPayload {
     last_total_ms: Option<u64>,
 }
 
-/// 启动 axum 服务（在 Tauri 启动前/后都行；放后台 task）
-async fn spawn_api_server(model_dir: PathBuf) -> Result<u16, Box<dyn std::error::Error>> {
-    let cfg = EngineConfig::default_for_dir(model_dir);
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::new(
+            std::env::var("RUST_LOG").unwrap_or_else(|_| "info,williw_core=debug,williw_api_server=debug".into()),
+        ))
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    let model_dir: PathBuf = std::env::var("WILLIW_MODEL_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            // 默认当前目录的 models 子目录；Android 端通过环境变量覆盖
+            std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join("models")
+        });
+
+    let cfg = EngineConfig::default_for_dir(model_dir.clone());
+
     let engine = Engine::new();
     engine.configure(cfg);
-    engine.load()?;
+    match engine.load() {
+        Ok(s) => tracing::info!("engine loaded: state={:?} model_id={:?}", s.state, s.model_id),
+        Err(e) => {
+            tracing::error!("engine load failed: {e}");
+            // mock 后端几乎不会失败；如果失败也继续启动——前端能看到 Error 状态
+        }
+    }
 
     let status = engine.status();
     let model_list = vec![ModelInfo {
@@ -125,129 +170,46 @@ async fn spawn_api_server(model_dir: PathBuf) -> Result<u16, Box<dyn std::error:
     }];
 
     let api_key = std::env::var("WILLIW_API_KEY").ok();
+
     let state = AppState { engine, model_list, api_key };
-
-    let cors = CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any);
-
-    let app = Router::new()
-        .route("/health", get(health))
-        .route("/v1/models", get(list_models))
-        .route("/v1/chat/completions", post(chat_completions))
-        .route("/v1/status", get(status_route))
-        .layer(cors)
-        .layer(TraceLayer::new_for_http())
-        .with_state(state);
+    let app = build_router(state);
 
     let port: u16 = std::env::var("WILLIW_API_PORT")
         .ok().and_then(|s| s.parse().ok()).unwrap_or(8081);
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let listener = TcpListener::bind(addr).await?;
-    let bound = listener.local_addr()?.port();
     tracing::info!("williw-api-server listening on http://{addr}");
 
-    tokio::spawn(async move {
-        if let Err(e) = axum::serve(listener, app).await {
-            tracing::error!("axum server error: {e}");
-        }
-    });
-    Ok(bound)
-}
-
-fn model_dir_for() -> PathBuf {
-    if let Ok(p) = std::env::var("WILLIW_MODEL_DIR") {
-        return PathBuf::from(p);
-    }
-    // Android 端：filesDir/models
-    #[cfg(target_os = "android")]
-    {
-        if let Some(dir) = std::env::var_os("ANDROID_FILES_DIR") {
-            return PathBuf::from(dir).join("models");
-        }
-    }
-    // 桌面端：当前目录的 models
-    std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join("models")
-}
-
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    // 1) 日志初始化
-    let _ = tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::new(
-            std::env::var("RUST_LOG").unwrap_or_else(|_| "info,williw_core=info,williw_tauri=info".into()),
-        ))
-        .with(tracing_subscriber::fmt::layer())
-        .try_init();
-
-    // 2) 启动 API 服务（同步阻塞至绑定完成）
-    let model_dir = model_dir_for();
-    tracing::info!("model dir: {}", model_dir.display());
-    let port = {
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .worker_threads(2)
-            .build()
-            .expect("build tokio runtime");
-        rt.block_on(async {
-            match spawn_api_server(model_dir).await {
-                Ok(p) => p,
-                Err(e) => {
-                    tracing::error!("api server failed to start: {e}");
-                    0
-                }
-            }
-        })
-    };
-    tracing::info!("API server bound on port {port}");
-
-    // 3) 启动 Tauri 应用
-    let api_base = format!("http://127.0.0.1:{port}");
-    tauri::Builder::default()
-        .setup(move |app| {
-            // 把端口透传给前端
-            if let Some(window) = app.get_webview_window("main") {
-                if port > 0 {
-                    let _ = window.eval(&format!(
-                        "window.__WILLIW_API_BASE__ = 'http://127.0.0.1:{port}';"
-                    ));
-                }
-            }
-            let _ = api_base;
-            Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![cmd_status, cmd_infer, cmd_reload])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
-}
-
-#[tauri::command]
-fn cmd_status() -> serde_json::Value {
-    // 简化：从前端 fetch /v1/status；这里只是占位
-    serde_json::json!({ "ok": true })
-}
-
-#[tauri::command]
-async fn cmd_infer(prompt: String) -> Result<String, String> {
-    // 占位：实际由前端通过 HTTP 调用 /v1/chat/completions
-    Ok(format!("(tauri cmd) would infer: {prompt}"))
-}
-
-#[tauri::command]
-fn cmd_reload() -> Result<(), String> {
+    axum::serve(listener, app).await?;
     Ok(())
 }
 
-#[cfg(not(mobile))]
-fn main() { run(); }
+fn build_router(state: AppState) -> Router {
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
 
-// === HTTP handlers ===
+    Router::new()
+        .route("/health", get(health))
+        .route("/v1/models", get(list_models))
+        .route("/v1/chat/completions", post(chat_completions))
+        .route("/v1/status", get(status))
+        .layer(cors)
+        .layer(TraceLayer::new_for_http())
+        .with_state(state)
+}
 
 async fn health() -> &'static str { "ok" }
 
 async fn list_models(State(s): State<AppState>) -> Json<ModelsResponse> {
-    Json(ModelsResponse { object: "list".into(), data: s.model_list.clone() })
+    Json(ModelsResponse {
+        object: "list".into(),
+        data: s.model_list.clone(),
+    })
 }
 
-async fn status_route(State(s): State<AppState>) -> Json<StatusPayload> {
+async fn status(State(s): State<AppState>) -> Json<StatusPayload> {
     let st = s.engine.status();
     Json(StatusPayload {
         state: format!("{:?}", st.state).to_lowercase(),
@@ -274,9 +236,11 @@ async fn chat_completions(
             return ApiError::new("invalid or missing API key", "authentication_error").into_response();
         }
     }
+
     if req.messages.is_empty() {
         return ApiError::new("messages must not be empty", "invalid_request_error").into_response();
     }
+
     let gen_req = GenerateRequest {
         messages: req.messages.clone(),
         max_tokens: req.max_tokens.unwrap_or(256),
@@ -284,6 +248,13 @@ async fn chat_completions(
         top_p: req.top_p.unwrap_or(0.9),
         stop: req.stop.clone().unwrap_or_default(),
     };
+
+    let stream = req.stream.unwrap_or(false);
+    if stream {
+        // MVP：流式返回暂以一次性返回代替（带 SSE Content-Type）
+        return sse_fallback(s, req, gen_req).await;
+    }
+
     match s.engine.generate(gen_req).await {
         Ok(r) => {
             let resp = ChatCompletionsResponse {
@@ -306,4 +277,48 @@ async fn chat_completions(
         }
         Err(e) => ApiError::new(e.to_string(), "inference_error").into_response(),
     }
+}
+
+/// MVP 阶段：流式走一次性响应（前端不会因此报错）。真流式留待后续 SSE chunk 实现。
+async fn sse_fallback(
+    s: AppState,
+    req: ChatCompletionsRequest,
+    gen_req: GenerateRequest,
+) -> Response {
+    let engine = s.engine.clone();
+    match engine.generate(gen_req).await {
+        Ok(r) => {
+            let chunk = serde_json::json!({
+                "id": format!("chatcmpl-{}", uuid::Uuid::new_v4()),
+                "object": "chat.completion.chunk",
+                "created": chrono::Utc::now().timestamp(),
+                "model": req.model,
+                "choices": [{
+                    "index": 0,
+                    "delta": { "role": "assistant", "content": r.text },
+                    "finish_reason": "stop"
+                }]
+            });
+            let body = format!("data: {}\n\ndata: [DONE]\n\n", chunk);
+            (
+                StatusCode::OK,
+                [("content-type", "text/event-stream"), ("cache-control", "no-cache")],
+                body,
+            ).into_response()
+        }
+        Err(e) => ApiError::new(e.to_string(), "inference_error").into_response(),
+    }
+}
+
+#[allow(dead_code)]
+fn _unused_broadcast() -> broadcast::Sender<String> {
+    let (tx, _rx) = broadcast::channel(16);
+    tx
+}
+#[allow(dead_code)]
+fn _unused_sse() -> Sse<impl futures_core::Stream<Item = Result<Event, std::convert::Infallible>>> {
+    let stream = async_stream::stream! {
+        yield Ok(Event::default().data("hello"));
+    };
+    Sse::new(stream).keep_alive(KeepAlive::default())
 }
