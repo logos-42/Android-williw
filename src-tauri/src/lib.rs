@@ -252,6 +252,18 @@ pub struct AppContext {
     api_enabled: Arc<Mutex<bool>>,
 }
 
+impl Clone for AppContext {
+    fn clone(&self) -> Self {
+        Self {
+            engine: self.engine.clone(),
+            settings: self.settings.clone(),
+            settings_path: self.settings_path.clone(),
+            api_handle: self.api_handle.clone(),
+            api_enabled: self.api_enabled.clone(),
+        }
+    }
+}
+
 impl AppContext {
     fn stop_api(&self) {
         let mut h = self.api_handle.lock();
@@ -584,7 +596,7 @@ struct ApiStatusPayload {
 }
 
 #[tauri::command]
-fn cmd_api_status(state: TauriState<'_, AppContext>, app: AppHandle) -> ApiStatusPayload {
+fn cmd_api_status(state: TauriState<'_, AppContext>, _app: AppHandle) -> ApiStatusPayload {
     let enabled = *state.api_enabled.lock();
     let s = state.settings.lock();
     let model = {
@@ -714,7 +726,7 @@ fn cmd_download_stream(
                     percent,
                     downloaded,
                     total,
-                    label: format!("{} / {}", human_bytes(downloadloaded), human_bytes_opt(total)),
+                    label: format!("{} / {}", human_bytes(downloaded), human_bytes_opt(total)),
                 });
                 last_emit = std::time::Instant::now();
             }
