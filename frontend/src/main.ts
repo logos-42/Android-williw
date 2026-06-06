@@ -12,33 +12,53 @@ import { initChatScreen, refreshChatStatus } from './screens/chat';
 import { initModelsScreen, refreshModelsList } from './screens/models';
 import { initConnectScreen, renderConnectPage } from './screens/connect';
 
+// 暴露 go() 到 window 方便 data-go 处理器 / dev console 调用
+declare global {
+  interface Window {
+    __williwGo?: (name: string) => void;
+  }
+}
+
+console.log('[williw] main.ts loaded, API_BASE=', API_BASE);
+
 // ====== 屏切换 ======
 function go(name: string): void {
+  console.log('[williw] go(', name, ')');
   $$('.screen').forEach((s) => s.classList.toggle('active', s.dataset.screen === name));
   $$('.tab').forEach((t) => t.classList.toggle('active', t.dataset.go === name));
   if (name === 'chat') void refreshChatStatus();
   if (name === 'connect') renderConnectPage();
   if (name === 'models') void refreshModelsList();
 }
+window.__williwGo = go;
 
 // ====== Boot ======
 async function boot(): Promise<void> {
   // 1) 先把 API_BASE 写回 state
   state.apiBase = API_BASE;
 
+  // 5) 初始化各屏（先 init，屏切换不依赖 boot 结果）
+  initHomeScreen();
+  initChatScreen();
+  initModelsScreen();
+  initConnectScreen();
+
   // 2) 拉 Tauri cmd 信息（如果在 Tauri 容器里）
-  if (isTauri()) {
-    const info = (await tauri<AppInfo>('cmd_app_info')) ?? null;
-    if (info) {
-      state.info = info;
-      state.apiPort = info.api_port || 8081;
-      state.apiKey = info.api_key ?? null;
+  try {
+    if (isTauri()) {
+      const info = (await tauri<AppInfo>('cmd_app_info')) ?? null;
+      if (info) {
+        state.info = info;
+        state.apiPort = info.api_port || 8081;
+        state.apiKey = info.api_key ?? null;
+      }
+      const settings = (await tauri<AppSettings>('cmd_settings_get')) ?? null;
+      if (settings) state.settings = settings;
+    } else {
+      state.apiPort = 8081;
     }
-    const settings = (await tauri<AppSettings>('cmd_settings_get')) ?? null;
-    if (settings) state.settings = settings;
-  } else {
-    // 浏览器直接打开（开发模式）
-    state.apiPort = 8081;
+  } catch (e) {
+    console.warn('[boot] tauri cmd failed', e);
   }
 
   // 3) 拉模型列表 + 状态
@@ -67,15 +87,30 @@ async function boot(): Promise<void> {
     state.selectedModel = m;
   }
 
-  // 5) 初始化各屏
-  initHomeScreen();
-  initChatScreen();
-  initModelsScreen();
-  initConnectScreen();
-
   // 6) 绑定全局屏切换
-  $$('[data-go]').forEach((el) => el.addEventListener('click', () => go(el.dataset.go!)));
-  $$('[data-back]').forEach((el) => el.addEventListener('click', () => go(el.dataset.back!)));
+  const goEls = $$('[data-go]');
+  const backEls = $$('[data-back]');
+  console.log('[williw] bind go:', goEls.length, 'bind back:', backEls.length);
+  goEls.forEach((el) => el.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    go(el.dataset.go!);
+  }));
+  backEls.forEach((el) => el.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    go(el.dataset.back!);
+  }));
+
+  // 兜底：document 级委托（防止某按钮的 click 被 stopPropagation 拦截）
+  document.addEventListener('click', (e) => {
+    const target = (e.target as HTMLElement | null)?.closest('[data-go], [data-back]') as HTMLElement | null;
+    if (!target) return;
+    const name = (target.dataset.go ?? target.dataset.back)!;
+    if (!name) return;
+    e.preventDefault();
+    go(name);
+  });
 
   // 7) 状态轮询（每 4s 拉一次 /v1/status，仅在主页/聊天可见时拉）
   setInterval(() => {
