@@ -83,9 +83,39 @@ fn load_settings(path: &PathBuf) -> AppSettings {
     AppSettings::default()
 }
 
+/// 写盘时把 `s` 序列化成 JSON，再与磁盘上现有文件做字段级 merge：
+/// 旧文件里存在但 `s` 里对应字段是"零值"（None / false / 0 / ""）的，
+/// 保留旧值——避免一次 settings.set 冲掉用户手工编辑过的字段。
+///
+/// 不递归、不处理嵌套对象：williw settings 全是平铺标量。
 fn save_settings(path: &PathBuf, s: &AppSettings) -> std::io::Result<()> {
     if let Some(parent) = path.parent() { std::fs::create_dir_all(parent)?; }
-    let bytes = serde_json::to_vec_pretty(s).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    let mut new_value: serde_json::Value = serde_json::to_value(s)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+
+    if let Ok(old_bytes) = std::fs::read(path) {
+        if let Ok(old_value) = serde_json::from_slice::<serde_json::Value>(&old_bytes) {
+            if let (Some(new_obj), Some(old_obj)) = (new_value.as_object_mut(), old_value.as_object()) {
+                for (k, v_old) in old_obj {
+                    let v_new = new_obj.get(k);
+                    let is_zero = match v_new {
+                        None => true,
+                        Some(serde_json::Value::Null) => true,
+                        Some(serde_json::Value::Bool(false)) => true,
+                        Some(serde_json::Value::Number(n)) => n.as_u64() == Some(0) || n.as_i64() == Some(0) || n.as_f64() == Some(0.0),
+                        Some(serde_json::Value::String(s)) => s.is_empty(),
+                        _ => false,
+                    };
+                    if is_zero {
+                        new_obj.insert(k.clone(), v_old.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    let bytes = serde_json::to_vec_pretty(&new_value)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     std::fs::write(path, bytes)
 }
 
@@ -357,8 +387,14 @@ pub fn run() {
             tracing::info!("model dir: {}", model_dir.display());
             let engine = Engine::new();
             engine.configure(EngineConfig::default_for_dir(model_dir));
-            if let Err(e) = engine.load() {
-                tracing::warn!("engine load returned: {e} (continuing, see /v1/status)");
+            match engine.load() {
+                Ok(_) => tracing::info!("engine loaded successfully (see /v1/status)"),
+                Err(e) => {
+                    // v0.1.2: load 失败是 fatal — UI 必须立刻看到红色错误状态。
+                    // 仍然继续启动（让 /v1/status 能报告），但 level 提升到 error 并 print 到 stderr。
+                    tracing::error!("engine load FAILED: {e}");
+                    eprintln!("[williw] engine load failed: {e}");
+                }
             }
 
             let settings_arc = Arc::new(Mutex::new(settings.clone()));

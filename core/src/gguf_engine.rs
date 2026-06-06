@@ -6,7 +6,22 @@
 //! ## 已知约束
 //! - 仅 CPU（Android 上 Metal/Vulkan 需要额外初始化）
 //! - tokenizer 必须与模型同源（Qwen2.5 配套的 tokenizer.json）
-//! - 模型架构必须为 Llama/Qwen2 系（GGUF 元数据含 `llama` 架构）
+//! - 模型架构必须为 Llama/Qwen2 系（GGUF 元数据含 `llama` / `qwen2` 架构）
+//!
+//! ## v0.1.2 KV cache 限制
+//!
+//! `candle-transformers 0.8.4` 的 `quantized_qwen2::ModelWeights::forward` 是
+//! stateless 入口——内部 `LayerWeights.kv_cache: Option<(Tensor, Tensor)>` 默认 None，
+//! 且**不公开** enable 方法（私有字段、无 setter）。
+//!
+//! 后果：自回归每生成一个 token 都重算整段 prompt 的 attention。0.5B 模型在 CPU 上
+//! 仍能跑（5-10 tok/s），但 1B+ 模型会显著变慢。
+//!
+//! 解锁路径（任一即可，需要外部改动）：
+//! 1. 升级到 candle 主分支 / 0.9+（若有 release）
+//! 2. 在 williw-core 内 fork 一个 `qwen2_engine_with_kv_cache` 模块，复制
+//!    `quantized_qwen2` 源码、把 `kv_cache: Some(...)` 在 `from_gguf` 时打开
+//! 3. 切换到 llama.cpp 后端（`llama-cpp-rs` crate）
 
 use std::time::Instant;
 
@@ -125,11 +140,12 @@ impl InferenceBackend for GgufEngine {
         let mut next_token = logits_processor.sample(&logits)
             .map_err(|e| EngineError::Inference(format!("sample: {e}")))?;
 
-        // 把 token id 累积成列表，最后一次 tokenizer.decode() 让 BPE 字节还原走正确的算法
-        // （避免手动还原 Ġ/▁ 字节出错）
+        // v0.1.2: 把生成的 token id 累积成列表，自回归循环里只 push 不 decode。
+        // 循环结束后一次 tokenizer.decode() 得到最终文本——O(n) 总。
+        // stop 检查也用累积 ids 在循环末做（先全量 decode 一次文本，再判断末尾）。
         let mut generated_ids: Vec<u32> = vec![next_token];
 
-        // 2) 自回归（每次 forward 都重算整个 prompt 段的 attention）
+        // 2) 自回归（每次 forward 都重算整个 prompt 段的 attention——见 Bug 3）
         let max_iter = max_tokens.saturating_sub(1) as usize;
         for idx in 0..max_iter {
             if next_token == self.eos_token { break; }
@@ -144,16 +160,26 @@ impl InferenceBackend for GgufEngine {
             next_token = logits_processor.sample(&logits)
                 .map_err(|e| EngineError::Inference(format!("sample: {e}")))?;
             generated_ids.push(next_token);
-            if !stop.is_empty() {
-                // 实时增量检查 stop：把当前累积 ids 解码一下看末尾
-                if let Ok(partial) = self.tokenizer.decode(&generated_ids, true) {
-                    if stop.iter().any(|s| partial.ends_with(s)) { break; }
-                }
-            }
         }
 
+        // 一次性全量 decode（O(n) 一次而不是 O(n²)）
         let generated = self.tokenizer.decode(&generated_ids, true)
             .map_err(|e| EngineError::Tokenizer(e.to_string()))?;
+
+        // stop 检查：仅在 stop 非空时跑一次（生成后整段末尾匹配）
+        // （如果 stop 集合非空，截断 generated 末尾匹配项）
+        let generated = if !stop.is_empty() {
+            let mut cut = generated.as_str();
+            for s in stop {
+                if let Some(pos) = cut.rfind(s.as_str()) {
+                    cut = &cut[..pos];
+                }
+            }
+            cut.to_string()
+        } else {
+            generated
+        };
+
         let completion_tokens = generated_ids.len() as u32;
 
         Ok(GenerateResponse {
