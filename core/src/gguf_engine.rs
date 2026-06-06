@@ -104,17 +104,17 @@ impl InferenceBackend for GgufEngine {
         let prompt_n = prompt_ids.len() as u32;
 
         let mut model = self.model.clone();
-        let mut cache = quantized_llama::Cache::new(true, DType::F32, &self.device, None)
-            .map_err(|e| EngineError::Inference(format!("cache: {e}")))?;
+        // candle-transformers 0.8.4: quantized_llama::ModelWeights::forward 内部不持有 KV cache
+        // 每次 forward 都重算 prompt 段的 attention（慢但正确）
 
-        let mut logits_processor = LogitsProcessor::new(0x1234, Some(temperature), Some(top_p));
+        let mut logits_processor = LogitsProcessor::new(0x1234, Some(temperature as f64), Some(top_p as f64));
 
         // 1) 预热：把 prompt 一次性 forward
         let input = Tensor::new(prompt_ids.as_slice(), &self.device)
             .map_err(|e| EngineError::Inference(format!("tensor: {e}")))?
             .unsqueeze(0)
             .map_err(|e| EngineError::Inference(format!("unsqueeze: {e}")))?;
-        let logits = model.forward(&input, 0, &mut cache)
+        let logits = model.forward(&input, 0)
             .map_err(|e| EngineError::Inference(format!("forward: {e}")))?;
         let logits = logits.squeeze(0)
             .map_err(|e| EngineError::Inference(format!("squeeze: {e}")))?;
@@ -126,7 +126,7 @@ impl InferenceBackend for GgufEngine {
             generated.push_str(&t.replace('▁', " "));
         }
 
-        // 2) 自回归
+        // 2) 自回归（每次 forward 都重算整个 prompt 段的 attention）
         let max_iter = max_tokens.saturating_sub(1) as usize;
         for idx in 0..max_iter {
             if next_token == self.eos_token { break; }
@@ -134,7 +134,7 @@ impl InferenceBackend for GgufEngine {
                 .map_err(|e| EngineError::Inference(format!("tensor: {e}")))?
                 .unsqueeze(0)
                 .map_err(|e| EngineError::Inference(format!("unsqueeze: {e}")))?;
-            let logits = model.forward(&input, prompt_n as usize + idx + 1, &mut cache)
+            let logits = model.forward(&input, prompt_n as usize + idx + 1)
                 .map_err(|e| EngineError::Inference(format!("forward: {e}")))?;
             let logits = logits.squeeze(0)
                 .map_err(|e| EngineError::Inference(format!("squeeze: {e}")))?;
