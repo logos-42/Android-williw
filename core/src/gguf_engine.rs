@@ -10,16 +10,20 @@
 
 use std::time::Instant;
 
-use candle_core::{DType, Device, Tensor};
+use std::sync::Mutex;
+
+use candle_core::{Device, Tensor};
 use candle_transformers::generation::LogitsProcessor;
-use candle_transformers::models::quantized_llama::{self, ModelWeights};
+use candle_transformers::models::quantized_qwen2::ModelWeights;
 use tokenizers::Tokenizer;
 
 use crate::{ChatMessage, EngineConfig, EngineError, GenerateResponse, InferenceBackend};
 
 pub struct GgufEngine {
     model_id: String,
-    model: ModelWeights,
+    // candle 0.8 的 quantized_qwen2::ModelWeights 不实现 Clone，
+    // forward 需要 &mut self；这里包一层 Mutex 满足 InferenceBackend::generate(&self) 的接口契约。
+    model: Mutex<ModelWeights>,
     tokenizer: Tokenizer,
     device: Device,
     eos_token: u32,
@@ -57,7 +61,7 @@ impl GgufEngine {
             .copied()
             .unwrap_or(0);
 
-        Ok(Self { model_id, model, tokenizer, device, eos_token })
+        Ok(Self { model_id, model: Mutex::new(model), tokenizer, device, eos_token })
     }
 }
 
@@ -103,8 +107,8 @@ impl InferenceBackend for GgufEngine {
             .get_ids().to_vec();
         let prompt_n = prompt_ids.len() as u32;
 
-        let mut model = self.model.clone();
-        // candle-transformers 0.8.4: quantized_llama::ModelWeights::forward 内部不持有 KV cache
+        let mut model = self.model.lock().unwrap();
+        // candle-transformers 0.8.4: quantized_qwen2::ModelWeights::forward 内部不持有 KV cache
         // 每次 forward 都重算 prompt 段的 attention（慢但正确）
 
         let mut logits_processor = LogitsProcessor::new(0x1234, Some(temperature as f64), Some(top_p as f64));
@@ -121,10 +125,9 @@ impl InferenceBackend for GgufEngine {
         let mut next_token = logits_processor.sample(&logits)
             .map_err(|e| EngineError::Inference(format!("sample: {e}")))?;
 
-        let mut generated = String::new();
-        if let Some(t) = self.tokenizer.id_to_token(next_token) {
-            generated.push_str(&t.replace('▁', " "));
-        }
+        // 把 token id 累积成列表，最后一次 tokenizer.decode() 让 BPE 字节还原走正确的算法
+        // （避免手动还原 Ġ/▁ 字节出错）
+        let mut generated_ids: Vec<u32> = vec![next_token];
 
         // 2) 自回归（每次 forward 都重算整个 prompt 段的 attention）
         let max_iter = max_tokens.saturating_sub(1) as usize;
@@ -140,13 +143,27 @@ impl InferenceBackend for GgufEngine {
                 .map_err(|e| EngineError::Inference(format!("squeeze: {e}")))?;
             next_token = logits_processor.sample(&logits)
                 .map_err(|e| EngineError::Inference(format!("sample: {e}")))?;
-            if let Some(t) = self.tokenizer.id_to_token(next_token) {
-                generated.push_str(&t.replace('▁', " "));
-            }
+            generated_ids.push(next_token);
             if !stop.is_empty() {
-                if stop.iter().any(|s| generated.ends_with(s)) { break; }
+                // 实时增量检查 stop：把当前累积 ids 解码一下看末尾
+                if let Ok(partial) = self.tokenizer.decode(&generated_ids, true) {
+                    if stop.iter().any(|s| partial.ends_with(s)) { break; }
+                }
             }
         }
+
+        let generated = self.tokenizer.decode(&generated_ids, true)
+            .map_err(|e| EngineError::Tokenizer(e.to_string()))?;
+        let completion_tokens = generated_ids.len() as u32;
+
+        Ok(GenerateResponse {
+            text: generated,
+            prompt_tokens: prompt_n,
+            completion_tokens,
+            total_ms: start.elapsed().as_millis() as u64,
+        })
+    }
+}
 
         Ok(GenerateResponse {
             text: generated,
