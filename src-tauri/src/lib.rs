@@ -238,6 +238,9 @@ fn start_api_server(
     })?;
     let port = bound_addr.port();
     tracing::info!("williw-api-server listening on http://{bound_addr}");
+    for lan in collect_lan_addrs(port) {
+        tracing::info!("  · lan: {lan}");
+    }
     let _ = rt.spawn(run_axum_to_shutdown(listener, app, rx));
     Ok((port, bound_addr, tx, rt))
 }
@@ -319,10 +322,12 @@ impl AppContext {
                 });
                 *self.api_enabled.lock() = true;
 
-                // 通知前端
+                // 通知前端（含局域网地址）
+                let lan = collect_lan_addrs(bound_port);
                 let _ = app.emit("api://started", serde_json::json!({
                     "port": bound_port,
                     "addr": bound_addr.to_string(),
+                    "lan_addrs": lan,
                 }));
                 Ok(bound_port)
             }
@@ -593,6 +598,8 @@ struct ApiStatusPayload {
     addr: Option<String>,
     api_key: Option<String>,
     model: Option<ModelEntry>,
+    /// 局域网可用地址（形如 http://192.168.1.5:8081）
+    lan_addrs: Vec<String>,
 }
 
 #[tauri::command]
@@ -614,13 +621,38 @@ fn cmd_api_status(state: TauriState<'_, AppContext>, _app: AppHandle) -> ApiStat
         } else { None }
     };
     let addr = state.api_handle.lock().as_ref().map(|h| h.bound_addr.to_string());
+    let lan_addrs = if enabled { collect_lan_addrs(s.api_port) } else { Vec::new() };
     ApiStatusPayload {
         enabled,
         port: s.api_port,
         addr,
         api_key: s.api_key.clone(),
         model,
+        lan_addrs,
     }
+}
+
+/// 收集本机所有非回环 IPv4 地址，组装成「http://ip:port」列表，
+/// 方便其它设备扫码 / 手动填入。失败时返回空数组。
+fn collect_lan_addrs(port: u16) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+
+    // 主路径：通过 UDP "connect" 让系统挑出本机出口 IP（不真发包）
+    if let Ok(sock) = std::net::UdpSocket::bind("0.0.0.0:0") {
+        if sock.connect("8.8.8.8:80").is_ok() {
+            if let Ok(local) = sock.local_addr() {
+                let ip = local.ip();
+                if !ip.is_loopback() && !ip.is_unspecified() {
+                    out.push(format!("http://{ip}:{port}"));
+                }
+            }
+        }
+    }
+
+    // Android 没有 if_addrs crate 也能跑；这里只去重，不强行多网卡枚举
+    out.sort();
+    out.dedup();
+    out
 }
 
 #[derive(Debug, Deserialize)]
@@ -650,6 +682,7 @@ fn cmd_api_set_enabled(
             addr: None,
             api_key: state.settings.lock().api_key.clone(),
             model: None,
+            lan_addrs: Vec::new(),
         })
     }
 }
