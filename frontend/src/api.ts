@@ -9,6 +9,9 @@ import type {
   ChatCompletionsResponse,
   ApiError,
 } from './types';
+import { WilliwApiError } from './ui';
+
+export { WilliwApiError };
 
 declare global {
   interface Window {
@@ -21,12 +24,6 @@ export const API_BASE: string = (
   (typeof window !== 'undefined' && window.__WILLIW_API_BASE__) ||
   `${location.protocol}//${location.hostname}:${window.__WILLIW_API_PORT__ ?? 8081}`
 ).replace(/\/+$/, '');
-
-export class WilliwApiError extends Error {
-  constructor(public status: number, public kind: string, message: string) {
-    super(message);
-  }
-}
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const r = await fetch(API_BASE + path, {

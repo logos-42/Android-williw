@@ -2,7 +2,8 @@
 import { state } from '../state';
 import { listModels } from '../api';
 import { $, showToast, tauri } from '../ui';
-import type { ModelInfo } from '../types';
+// 注意：state.models / state.selectedModel 已经用 ModelInfo 类型化了
+// （在 state.ts 通过 GlobalState 接口传入），这里不需要显式引用。
 
 let installedModels: Array<{ id: string; name: string; path: string; size_bytes?: number; state: string }> = [];
 

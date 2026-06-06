@@ -1,13 +1,16 @@
 // 通用 UI 工具
 
+export class WilliwApiError extends Error {
+  constructor(public readonly status: number, public readonly kind: string, message: string) {
+    super(message);
+    this.name = 'WilliwApiError';
+  }
+}
+
 export function $<T extends HTMLElement = HTMLElement>(id: string): T {
   const el = document.getElementById(id);
   if (!el) throw new Error(`element #${id} not found`);
   return el as T;
-}
-
-export function $<T extends HTMLElement = HTMLElement>(id: string, fallback: T): T {
-  return (document.getElementById(id) as T | null) ?? fallback;
 }
 
 export function $$(selector: string, root: ParentNode = document): HTMLElement[] {

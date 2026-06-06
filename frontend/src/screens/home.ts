@@ -38,7 +38,7 @@ export function initHomeScreen(): void {
       heroModel.textContent = '—';
       return;
     }
-    const loaded = state.status?.state === 'ready' || state.status?.state === 'loaded';
+    const loaded = state.status?.state === 'ready';
     modelPill.dataset.state = loaded ? 'ready' : (state.status?.state ?? 'offline');
     modelPillText.textContent = loaded ? m.id : (m.id + ' · 未就绪');
     heroModel.textContent = m.id;
