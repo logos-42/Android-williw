@@ -164,12 +164,3 @@ impl InferenceBackend for GgufEngine {
         })
     }
 }
-
-        Ok(GenerateResponse {
-            text: generated,
-            prompt_tokens: prompt_n,
-            completion_tokens: 0,
-            total_ms: start.elapsed().as_millis() as u64,
-        })
-    }
-}
