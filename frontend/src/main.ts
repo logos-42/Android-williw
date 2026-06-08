@@ -88,12 +88,11 @@ async function boot(): Promise<void> {
   }
 
   // 4.5) 从 /v1/status 推断 apiOn + selectedModel（不再依赖 cmd_app_info 给的字段）
+  console.log('[williw] status sync start, status=', state.status);
   if (state.status) {
-    // 引擎 state 不是 idle/error/loading 时认为 API 在跑
     if (state.status.state === 'ready' || state.status.state === 'generating') {
       state.apiOn = true;
     }
-    // 引擎的 model_id 当作 selectedModel（如果上面没设过）
     if (!state.selectedModel && state.status.model_id) {
       state.selectedModel = {
         id: state.status.model_id,
@@ -103,12 +102,44 @@ async function boot(): Promise<void> {
       };
     }
   }
+  console.log('[williw] status sync end, apiOn=', state.apiOn, 'selectedModel=', state.selectedModel);
 
   // 4.6) 同步刷新主页 UI（applyPowerUI / applyModelPill 在 home.ts 里挂到 state 上）
   const applyPowerUI = (state as unknown as { _applyPowerUI?: () => void })._applyPowerUI;
   const applyModelPill = (state as unknown as { _applyModelPill?: () => void })._applyModelPill;
   if (applyPowerUI) applyPowerUI();
   if (applyModelPill) applyModelPill();
+
+  // 兜底：直接改 DOM（不依赖 home.ts 的 state 挂载）
+  console.log('[williw] direct DOM write fallback');
+  try {
+    const modelPill = document.getElementById('model-pill');
+    const modelPillText = document.getElementById('model-pill-text');
+    const stateTextEl = document.getElementById('state-text');
+    const powerLabel = document.getElementById('power-label');
+    const powerBtn = document.getElementById('power-btn');
+    const ringFg = document.getElementById('ring-fg');
+    const addrText = document.getElementById('addr-text');
+    const heroModel = document.getElementById('hero-model');
+    if (modelPill && state.status?.state === 'ready') {
+      modelPill.dataset.state = 'ready';
+      if (modelPillText) modelPillText.textContent = state.status.model_id ?? '已加载';
+      if (heroModel) heroModel.textContent = state.status.model_id ?? '—';
+    }
+    if (stateTextEl && state.apiOn && state.status?.state === 'ready') {
+      stateTextEl.textContent = '算力服务运行中';
+    }
+    if (powerBtn && state.apiOn) {
+      powerBtn.classList.add('on');
+      if (powerLabel) powerLabel.textContent = '关闭';
+      if (ringFg) ringFg.classList.add('on');
+    }
+    if (addrText && state.apiOn) {
+      addrText.textContent = state.apiBase;
+    }
+  } catch (e) {
+    console.warn('[williw] direct DOM fallback failed', e);
+  }
 
   // 6) 绑定全局屏切换（顶层 bindNav 已绑，这里只额外加轮询）
 
