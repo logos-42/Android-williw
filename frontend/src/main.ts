@@ -87,6 +87,29 @@ async function boot(): Promise<void> {
     state.selectedModel = m;
   }
 
+  // 4.5) 从 /v1/status 推断 apiOn + selectedModel（不再依赖 cmd_app_info 给的字段）
+  if (state.status) {
+    // 引擎 state 不是 idle/error/loading 时认为 API 在跑
+    if (state.status.state === 'ready' || state.status.state === 'generating') {
+      state.apiOn = true;
+    }
+    // 引擎的 model_id 当作 selectedModel（如果上面没设过）
+    if (!state.selectedModel && state.status.model_id) {
+      state.selectedModel = {
+        id: state.status.model_id,
+        object: 'model',
+        created: 0,
+        owned_by: 'williw',
+      };
+    }
+  }
+
+  // 4.6) 同步刷新主页 UI（applyPowerUI / applyModelPill 在 home.ts 里挂到 state 上）
+  const applyPowerUI = (state as unknown as { _applyPowerUI?: () => void })._applyPowerUI;
+  const applyModelPill = (state as unknown as { _applyModelPill?: () => void })._applyModelPill;
+  if (applyPowerUI) applyPowerUI();
+  if (applyModelPill) applyModelPill();
+
   // 6) 绑定全局屏切换（顶层 bindNav 已绑，这里只额外加轮询）
 
   // 7) 状态轮询（每 4s 拉一次 /v1/status，仅在主页/聊天可见时拉）
@@ -96,6 +119,8 @@ async function boot(): Promise<void> {
     if (!homeVisible && !chatVisible) return;
     void getStatus().then((s: EngineStatus) => {
       state.status = s;
+      // 同步推断 apiOn（用户没主动关时，引擎 ready/generating 就认为开着）
+      if (s.state === 'ready' || s.state === 'generating') state.apiOn = true;
       const applyPill = (state as unknown as { _applyPowerUI?: () => void })._applyPowerUI;
       if (applyPill) applyPill();
     }).catch(() => undefined);
