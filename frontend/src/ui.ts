@@ -7,10 +7,17 @@ export class WilliwApiError extends Error {
   }
 }
 
+/** 严格版：找不到就 throw。** 慎用** — 元素可能动态生成。
+ *  业务屏内建议用 try$() 或 getElementById。 */
 export function $<T extends HTMLElement = HTMLElement>(id: string): T {
   const el = document.getElementById(id);
   if (!el) throw new Error(`element #${id} not found`);
   return el as T;
+}
+
+/** 安全版：找不到返回 null。** 推荐在屏 init 里用这个。 */
+export function try$<T extends Element = Element>(id: string): T | null {
+  return document.getElementById(id) as T | null;
 }
 
 export function $$(selector: string, root: ParentNode = document): HTMLElement[] {

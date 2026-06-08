@@ -1,47 +1,58 @@
 // 主页：开关 + 状态
 import { state } from '../state';
-import { $, $$, showToast, tauri } from '../ui';
+import { try$, showToast, tauri } from '../ui';
 
 export function initHomeScreen(): void {
-  const powerBtn = $('power-btn');
-  const powerLabel = $('power-label');
-  const ringFg = $('ring-fg');
-  const stateText = $('state-text');
-  const addrText = $('addr-text');
-  const heroModel = $('hero-model');
-  const modelPill = $('model-pill');
-  const modelPillText = $('model-pill-text');
-  const tipCard = $('tip-card') ?? document.querySelector<HTMLElement>('.tip');
+  // 关键：必须用 try$，不能用 $() 严格版 — 后者找不到就 throw，破坏后续 _applyPowerUI 挂载
+  const powerBtn = try$<HTMLButtonElement>('power-btn');
+  const powerLabel = try$<HTMLElement>('power-label');
+  const ringFg = try$<SVGElement>('ring-fg');
+  const stateText = try$<HTMLElement>('state-text');
+  const addrText = try$<HTMLElement>('addr-text');
+  const heroModel = try$<HTMLElement>('hero-model');
+  const modelPill = try$<HTMLElement>('model-pill');
+  const modelPillText = try$<HTMLElement>('model-pill-text');
+  const tipCard = try$('tip-card') ?? document.querySelector<HTMLElement>('.tip');
+
+  if (!powerBtn || !powerLabel || !ringFg || !stateText || !addrText || !heroModel || !modelPill || !modelPillText) {
+    console.warn('[home] some required elements missing — UI may be partially broken', {
+      powerBtn: !!powerBtn, powerLabel: !!powerLabel, ringFg: !!ringFg, stateText: !!stateText,
+      addrText: !!addrText, heroModel: !!heroModel, modelPill: !!modelPill, modelPillText: !!modelPillText,
+    });
+    return;
+  }
+
+  console.log('[home] init ok, all elements present');
 
   function applyPowerUI(): void {
     if (state.apiOn) {
-      powerBtn.classList.add('on');
-      powerLabel.textContent = '关闭';
-      ringFg.classList.add('on');
-      stateText.textContent =
+      powerBtn!.classList.add('on');
+      powerLabel!.textContent = '关闭';
+      ringFg!.classList.add('on');
+      stateText!.textContent =
         state.status && state.status.state === 'ready' ? '算力服务运行中' : '正在启动…';
-      addrText.textContent = state.apiBase;
+      addrText!.textContent = state.apiBase;
     } else {
-      powerBtn.classList.remove('on');
-      powerLabel.textContent = '开启';
-      ringFg.classList.remove('on');
-      stateText.textContent = '已关闭';
-      addrText.textContent = '—';
+      powerBtn!.classList.remove('on');
+      powerLabel!.textContent = '开启';
+      ringFg!.classList.remove('on');
+      stateText!.textContent = '已关闭';
+      addrText!.textContent = '—';
     }
   }
 
   function applyModelPill(): void {
     const m = state.selectedModel;
     if (!m || !m.id) {
-      modelPill.dataset.state = 'offline';
-      modelPillText.textContent = '未加载模型';
-      heroModel.textContent = '—';
+      modelPill!.dataset.state = 'offline';
+      modelPillText!.textContent = '未加载模型';
+      heroModel!.textContent = '—';
       return;
     }
     const loaded = state.status?.state === 'ready';
-    modelPill.dataset.state = loaded ? 'ready' : (state.status?.state ?? 'offline');
-    modelPillText.textContent = loaded ? m.id : (m.id + ' · 未就绪');
-    heroModel.textContent = m.id;
+    modelPill!.dataset.state = loaded ? 'ready' : (state.status?.state ?? 'offline');
+    modelPillText!.textContent = loaded ? m.id : (m.id + ' · 未就绪');
+    heroModel!.textContent = m.id;
   }
 
   powerBtn.addEventListener('click', async () => {
@@ -78,5 +89,4 @@ export function initHomeScreen(): void {
   applyModelPill();
 
   // tab/back 按钮的 data-go / data-back 在 main.ts 里统一绑
-  void $$;
 }
